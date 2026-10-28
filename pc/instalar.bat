@@ -41,6 +41,11 @@ if errorlevel 1 (
 )
 
 echo.
+echo Ligando o vigia (reabre o Hub sozinho se ele fechar)...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0vigia_instalar.ps1"
+if errorlevel 1 echo Nao deu para ligar o vigia. O Hub funciona normalmente sem ele.
+
+echo.
 echo Pronto! Abrindo o 3DS Hub (icone perto do relogio)...
 echo Ele vai ligar sozinho junto com o Windows daqui pra frente.
 start "" pyw -3 "%~dp0hub.py"

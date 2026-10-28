@@ -6,11 +6,16 @@ NO PC
    Durante a instalacao, marque "Add Python to PATH".
 2. Extraia este .zip em uma pasta que nao va mudar de lugar
    (ex: C:\3dshub). O Hub liga com o Windows a partir dessa pasta.
-   Se o PC ja tem o Hub: feche o Hub (icone > Sair) e copie a pasta
-   "pc" (e os arquivos 3dshub.3dsx / 3dshub.cia) por cima dos antigos.
+   Se o PC ja tem o Hub: copie a pasta "pc" (e os arquivos 3dshub.3dsx /
+   3dshub.cia) por cima dos antigos e rode o instalar.bat (passo 3): ele
+   fecha o Hub antigo e abre a versao nova. Seu config.json e mantido se
+   voce nao copiar o config.json do pacote por cima.
 3. Entre na pasta "pc" e de dois cliques em "instalar.bat".
-   Ele instala as bibliotecas, confere o driver do controle (ViGEmBus)
-   e abre o 3DS Hub (icone perto do relogio).
+   Ele instala as bibliotecas, confere o driver do controle (ViGEmBus),
+   liga o vigia e abre o 3DS Hub (icone perto do relogio).
+   O vigia confere a cada 2 minutos se o Hub esta aberto e, se ele
+   fechou, abre de novo sozinho. Para desligar o Hub de vez: Agendador
+   de Tarefas do Windows > "3DS Hub - vigia" > Desabilitar.
 4. Se o Windows perguntar sobre o firewall, permita na rede privada.
 
 NO 3DS (escolha um jeito)
@@ -53,7 +58,12 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.3.1)
+O QUE MUDOU NESTA VERSAO (1.3.2)
+- Vigia no PC: se o 3DS Hub do PC fechar, ele abre de novo sozinho em ate
+  2 minutos (sem o Hub aberto o 3DS nao acha o PC). Rode o instalar.bat
+  de novo para ligar o vigia.
+
+VERSAO 1.3.1
 - O app fecha na hora: antes podia demorar ate 20 segundos esperando a
   busca de versao nova ou a conexao pela internet terminar.
 - Enquanto conecta pela internet, START sai do app.
