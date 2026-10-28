@@ -1,0 +1,174 @@
+{
+  "iniciar_com_windows": true,
+  "controle": {
+    "sensibilidade_toque": 2.5,
+    "giro_pixels_por_grau": 15.0,
+    "giro_analogico_graus": 150,
+    "giro_zona_morta": 2.0,
+    "giro_inverter_horizontal": false,
+    "giro_inverter_vertical": true,
+    "camera_pixels_por_quadro": 15,
+    "giro_pausar_no_toque": true,
+    "giro_l_r_como_cliques": true
+  },
+  "perfis": [
+    {
+      "nome": "Padrao",
+      "processos": [],
+      "modo": "controle",
+      "l_r_como_gatilhos": false,
+      "giroscopio": "mouse"
+    },
+    {
+      "nome": "Minecraft",
+      "processos": [
+        "javaw.exe"
+      ],
+      "modo": "teclado",
+      "giroscopio": "mouse",
+      "analogico": "wasd",
+      "teclas": {
+        "A": "space",
+        "B": "shift",
+        "X": "e",
+        "Y": "q",
+        "L": "mouse_direito",
+        "R": "mouse_esquerdo",
+        "START": "esc",
+        "SELECT": "tab",
+        "CIMA": "f5",
+        "BAIXO": "ctrl",
+        "ESQUERDA": "1",
+        "DIREITA": "2"
+      },
+      "legenda": {
+        "A": "Pular",
+        "B": "Agachar",
+        "X": "Inventário",
+        "Y": "Soltar item",
+        "L": "Usar / colocar",
+        "R": "Atacar / quebrar",
+        "START": "Menu",
+        "SELECT": "Jogadores",
+        "CIMA": "Câmera (F5)",
+        "BAIXO": "Correr",
+        "ESQUERDA": "Item 1",
+        "DIREITA": "Item 2",
+        "CIRCLE": "Andar (WASD)",
+        "CSTICK": "Olhar"
+      }
+    },
+    {
+      "nome": "League of Legends",
+      "processos": [
+        "League of Legends.exe"
+      ],
+      "modo": "teclado",
+      "giroscopio": "mouse",
+      "analogico": "mouse",
+      "teclas": {
+        "Y": "q",
+        "X": "w",
+        "A": "e",
+        "B": "r",
+        "R": "mouse_direito",
+        "L": "mouse_esquerdo",
+        "CIMA": "d",
+        "DIREITA": "f",
+        "BAIXO": "b",
+        "ESQUERDA": "4",
+        "START": "esc",
+        "SELECT": "tab",
+        "ZL": "space",
+        "ZR": "ctrl"
+      },
+      "legenda": {
+        "Y": "Q",
+        "X": "W",
+        "A": "E",
+        "B": "R (ultimate)",
+        "R": "Andar / atacar",
+        "L": "Selecionar / mirar",
+        "CIMA": "D (feitiço 1)",
+        "DIREITA": "F (feitiço 2)",
+        "BAIXO": "B (voltar à base)",
+        "ESQUERDA": "4 (sentinela)",
+        "START": "Esc (menu)",
+        "SELECT": "Tab (placar)",
+        "ZL": "Espaço (câmera)",
+        "ZR": "Ctrl (subir skill)",
+        "CIRCLE": "Cursor"
+      }
+    }
+  ],
+  "teclado_padrao": {
+    "analogico": "setas",
+    "teclas": {
+      "A": "space",
+      "B": "shift",
+      "X": "e",
+      "Y": "r",
+      "L": "q",
+      "R": "f",
+      "START": "esc",
+      "SELECT": "tab",
+      "CIMA": "w",
+      "BAIXO": "s",
+      "ESQUERDA": "a",
+      "DIREITA": "d"
+    }
+  },
+  "atalhos": [
+    {
+      "nome": "Mutar mic",
+      "tipo": "teclas",
+      "valor": "ctrl+shift+m"
+    },
+    {
+      "nome": "Ensurdecer",
+      "tipo": "teclas",
+      "valor": "ctrl+shift+d"
+    },
+    {
+      "nome": "Travar PC",
+      "tipo": "travar"
+    },
+    {
+      "nome": "Print",
+      "tipo": "teclas",
+      "valor": "win+shift+s"
+    },
+    {
+      "nome": "Area trab.",
+      "tipo": "teclas",
+      "valor": "win+d"
+    },
+    {
+      "nome": "Tarefas",
+      "tipo": "abrir",
+      "valor": "taskmgr"
+    },
+    {
+      "nome": "Navegador",
+      "tipo": "abrir",
+      "valor": "https://www.google.com"
+    },
+    {
+      "nome": "Arquivos",
+      "tipo": "abrir",
+      "valor": "explorer"
+    },
+    {
+      "nome": "Calculad.",
+      "tipo": "abrir",
+      "valor": "calc"
+    }
+  ],
+  "camera": {
+    "porta_http": 8090,
+    "modo_3d": "anaglifo"
+  },
+  "espelho": {
+    "qualidade_jpeg": 70
+  }
+}

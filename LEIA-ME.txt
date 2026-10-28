@@ -1,0 +1,54 @@
+3DS HUB - como instalar
+=======================
+
+NO PC
+1. Instale o Python 3 (https://www.python.org/downloads/).
+   Durante a instalacao, marque "Add Python to PATH".
+2. Extraia este .zip em uma pasta que nao va mudar de lugar
+   (ex: C:\3dshub). O Hub liga com o Windows a partir dessa pasta.
+   Se o PC ja tem o Hub: feche o Hub (icone > Sair) e copie a pasta
+   "pc" (e os arquivos 3dshub.3dsx / 3dshub.cia) por cima dos antigos.
+3. Entre na pasta "pc" e de dois cliques em "instalar.bat".
+   Ele instala as bibliotecas, confere o driver do controle (ViGEmBus)
+   e abre o 3DS Hub (icone perto do relogio).
+4. Se o Windows perguntar sobre o firewall, permita na rede privada.
+
+NO 3DS (escolha um jeito)
+- Pelo Homebrew Launcher: copie "3dshub.3dsx" para a pasta /3ds/ do SD.
+- No HOME Menu, como um jogo: copie "3dshub.cia" para o SD e instale
+  pelo FBI. Depois pode apagar o .cia do SD.
+
+O 3DS ACHA O PC SOZINHO
+- Com o PC e o 3DS na mesma rede (ou no hotspot do PC), o 3DS Hub
+  procura o PC sozinho. Em Ajustes da para procurar de novo ou
+  digitar o IP na mao (ele aparece no menu do icone do Hub).
+
+ATUALIZAR SEM TIRAR O CARTAO
+- Deixe o 3dshub.3dsx/.cia novo na pasta do 3DS Hub no PC e, no 3DS,
+  va em Ajustes > Atualizar o app. Depois feche e abra o app.
+
+O QUE MUDOU NESTA VERSAO
+- Descoberta automatica do PC e tela de Ajustes no 3DS (giroscopio,
+  touchpad, procurar PC, digitar IP, atualizar o app).
+- Atualizacao do app pelo Wi-Fi (.3dsx e CIA).
+- Versao CIA, com icone e banner no HOME Menu.
+- Espelho: aba "Clicar" - tocar na imagem clica na janela do PC
+  (segurar = clique direito, arrastar = rodinha).
+- Espelho com zoom enche a tela e nao trava mais nas bordas.
+- Titulos de musica e janelas com acento.
+- Icone do Hub mostra o IP certo para o 3DS (o do hotspot, se ligado).
+
+OBS
+- O PC e o 3DS precisam estar na mesma rede. Redes com login
+  (faculdade, eduroam) nao funcionam no 3DS: use o hotspot do PC
+  (Configuracoes > Rede > Hotspot movel, banda 2,4 GHz).
+- As configuracoes (perfis, atalhos, sensibilidade) ficam em
+  pc\config.json (icone > Editar configuracoes) - o giroscopio e o
+  touchpad tambem podem ser ajustados pelo 3DS, em Ajustes.
+- Se o Controle nao iniciar mesmo com o ViGEmBus instalado, veja o
+  log (icone > Ver log). Driver duplicado ou antigo causa isso:
+  desinstale o "ViGEm Bus Driver", reinicie e instale a versao 1.22
+  de https://github.com/nefarius/ViGEmBus/releases
+- Se mudar a pasta de lugar depois, abra o Hub uma vez pelo
+  instalar.bat de novo, e desmarque/marque "Iniciar com o Windows"
+  no menu do icone para atualizar o atalho.

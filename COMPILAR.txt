@@ -1,0 +1,49 @@
+3DS HUB - codigo-fonte
+======================
+
+ESTRUTURA
+  3ds\Makefile            receita de compilacao do app do 3DS
+  3ds\icon.png            icone do app (gerado por arte\gerar_arte.py)
+  3ds\source\main.c       menu principal (e descoberta automatica do PC)
+  3ds\source\ui.c/.h      visual (citro2d): cores, texto, cartoes, icones, imagens
+  3ds\source\comum.c/.h   IP, rede, descoberta, CRC32 e JPEG (usado por todos)
+  3ds\source\controle.c   controle/teclado + touchpad + giroscopio
+  3ds\source\tela.c       Segunda Tela (graficos, musica, atalhos)
+  3ds\source\sintetizador.c  teclado/theremin com som (NDSP)
+  3ds\source\camera.c     camera do 3DS -> PC (OBS)
+  3ds\source\espelho.c    janela do PC -> tela de cima (zoom e aba Clicar)
+  3ds\source\ajustes.c    procurar PC, IP, atualizar o app, giroscopio/touchpad
+  3ds\arte\gerar_arte.py  gera icon.png, banner.png e banner.wav
+  3ds\3dshub.rsf          especificacao do CIA (servicos que o app usa)
+  3ds\criar_cia.bat       gera o 3dshub.cia
+
+  pc\hub.py               servidor do PC (icone na bandeja)
+  pc\config.py            leitura do config.json
+  pc\controle.py          porta 5005 (UDP)
+  pc\tela.py              porta 5006 (UDP) - tambem responde o ping do menu
+  pc\camera.py            porta 5007 (TCP) + OBS em http://127.0.0.1:8090/obs
+  pc\espelho.py           porta 5008 (TCP) - imagem, zoom e cliques
+  pc\descoberta.py        porta 5009 (UDP broadcast) - o 3DS acha o PC
+  pc\ajustes.py           porta 5010 (TCP) - atualizacao do app e ajustes
+  pc\util.py              teclado/mouse, cliques, IPs do PC
+
+COMPILAR O APP DO 3DS (Windows)
+1. Instale o devkitPro (https://github.com/devkitPro/installer/releases)
+   marcando "3DS Development".
+2. Instale a biblioteca de JPEG. No terminal MSYS2 do devkitPro:
+     pacman -S 3ds-libjpeg-turbo
+3. Na mesma janela, entre na pasta 3ds e rode:
+     make
+   Sai o 3dshub.3dsx (e o 3dshub.elf).
+
+GERAR O CIA (opcional, para o HOME Menu)
+1. Baixe para uma pasta "ferramentas" ao lado da pasta 3ds:
+   - makerom (github.com/3DSGuy/Project_CTR, makerom-...-win_x86_64.zip)
+     -> ferramentas\makerom\makerom.exe
+   - bannertool (github.com/diasurgical/bannertool, bannertool.zip)
+     -> ferramentas\bannertool\windows-x86_64\bannertool.exe
+2. Depois do make, rode 3ds\criar_cia.bat. Sai o 3dshub.cia.
+
+RODAR O SERVIDOR DO PC
+  Python 3 + "pc\instalar.bat" (instala tudo e abre o Hub).
+  Para ver os logs na tela:  py pc\hub.py

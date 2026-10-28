@@ -1,0 +1,10 @@
+vgamepad
+pynput
+psutil
+pywin32
+pycaw
+pystray
+pillow
+winrt-runtime
+winrt-Windows.Media.Control
+winrt-Windows.Foundation
