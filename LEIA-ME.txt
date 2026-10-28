@@ -61,7 +61,11 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.4.0)
+O QUE MUDOU NESTA VERSAO (1.4.1)
+- Fechar pelo HOME nao trava mais na tela "fechando" (o encerramento da
+  rede finalizava o servico duas vezes e travava no console de verdade).
+
+VERSAO 1.4.0
 - Parear longe de casa: o PC mostra um codigo e voce digita no 3DS
   (Ajustes > Acesso pela internet). Nao precisa mais estar na mesma rede.
 - Atualize tambem a pasta pc do PC (e rode o instalar.bat).

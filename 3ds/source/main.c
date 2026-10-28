@@ -322,14 +322,11 @@ int main(int argc, char **argv) {
     updater_exit();
     fecharSondaDeVez();             // pela internet a sonda é um túnel: fecha também
     if (descoberta >= 0) close(descoberta);
-    if (rede) {
-        // derruba na hora qualquer socket ainda aberto: sem isso o encerramento
-        // da rede pode ficar esperando conexões terminarem (e o app demora a fechar)
-        SOCU_ShutdownSockets();
-        SOCU_CloseSockets();
-        socExit();
-    }
     curl_global_cleanup();
+    // Só socExit(), como nos outros apps. O SOCU_ShutdownSockets() que havia aqui é o mesmo
+    // "finalizar" que o socExit() já faz: finalizar duas vezes travava o fechamento pelo
+    // HOME no console de verdade (a tela "fechando" não saía nunca).
+    if (rede) socExit();
     uiEncerrar();
     gfxExit();
     romfsExit();
