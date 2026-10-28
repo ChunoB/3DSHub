@@ -36,6 +36,7 @@ u32 crc32(u32 crc, const void *dados, size_t n);  // igual ao zlib.crc32 (comece
 // Rede. Com modoRemoto ligado (o PC não está na mesma rede), as mesmas funções usam o
 // túnel pela internet (tunel.c): os módulos não precisam saber a diferença.
 extern bool modoRemoto;
+extern bool redeMudou;               // os Ajustes trocaram de PC ou de casa/internet: o menu reabre a sonda
 int  abrirUDP(int porta, struct sockaddr_in *destino);    // não bloqueia
 // Conecta sem travar: B ou START cancela. Retorna o socket, -1 se falhar ou -2 se cancelado.
 int  conectarTCP(int porta, int timeoutMs);

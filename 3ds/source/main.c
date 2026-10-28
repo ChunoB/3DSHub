@@ -124,6 +124,7 @@ static void rodarRemoto(bool temIP) {
         if (!tunelBuscarEndereco()) return;
         fecharSondaDeVez();
         modoRemoto = true;
+        snprintf(nomePC, sizeof(nomePC), "%s", tunelNomePC(tunelAtual()));
         ultimaRespostaHub = 0;
         abrirSonda();
         if (sonda < 0) {             // não deu: continua na rede de casa
@@ -158,7 +159,9 @@ static void rodarDescoberta(u32 quadro) {
     char ip[32], nome[32];
     while (descobertaResposta(descoberta, ip, sizeof(ip), nome, sizeof(nome))) {
         if (modoRemoto) {
-            // o PC apareceu na rede de casa: volta para a conexão direta
+            // outro PC desta rede não tira o 3DS do PC escolhido pela internet
+            if (strcmp(nome, tunelNomePC(tunelAtual()))) continue;
+            // o mesmo PC apareceu nesta rede: volta para a conexão direta
             fecharSondaDeVez();
             modoRemoto = false;
             definirIP(ip);
@@ -300,6 +303,11 @@ int main(int argc, char **argv) {
                 fecharSonda();
                 it->abrir();
                 ultimaRespostaHub = 0;
+                if (redeMudou) {            // nos Ajustes escolheu outro PC (ou casa/internet)
+                    redeMudou = false;
+                    fecharSondaDeVez();
+                    if (modoRemoto) mensagemRapida("Conectando pela internet...", nomePC);
+                }
                 if (rede) abrirSonda();     // o IP pode ter mudado nos Ajustes
             }
         }

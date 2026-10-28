@@ -4,12 +4,20 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define TUNEL_BASE 0x4000          // "sockets" do túnel são números a partir daqui
+#define TUNEL_BASE    0x4000       // "sockets" do túnel são números a partir daqui
+#define TUNEL_MAX_PCS 8
 
-bool tunelPareado(void);           // tem código salvo (pareou em casa)
-bool tunelSalvar(const char *token, const char *topico);
-void tunelEsquecer(void);
-// Descobre o endereço atual do PC (lê o canal do ntfy). Bloqueia alguns segundos.
+// PCs pareados (cada um pareado uma vez, em casa, na mesma rede dele)
+bool tunelPareado(void);           // tem algum PC escolhido para a internet
+int  tunelQuantos(void);
+const char *tunelNomePC(int i);    // nome do Windows, o mesmo que a descoberta mostra
+int  tunelAtual(void);             // PC usado pela internet (-1 = nenhum)
+int  tunelIndice(const char *nome);    // -1 se esse PC não está pareado
+void tunelEscolher(int i);
+bool tunelSalvar(const char *nome, const char *token, const char *topico);   // pareia (ou atualiza) e escolhe
+void tunelEsquecer(int i);
+
+// Descobre o endereço atual do PC escolhido (lê o canal do ntfy). Bloqueia alguns segundos.
 bool tunelBuscarEndereco(void);
 const char *tunelEndereco(void);   // "" se ainda não sabe
 

@@ -6,7 +6,7 @@ Protocolo (TCP, porta 5010; o 3DS pede e o PC responde):
     "B <tipo>\\n"        -> "3DSB" + u32 tamanho + o arquivo
     "C\\n"               -> "3DSC" + u32 tamanho + "chave=valor\\n" das configurações do controle
     "W <chave> <valor>\\n" -> "3DSW" + u32 (1 = gravou, 0 = recusou)
-    "R\\n"               -> "3DSR" + u32 tamanho + "token\\ntopico\\n"   (liga o acesso pela internet;
+    "R\\n"               -> "3DSR" + u32 tamanho + "token\\ntopico\\nnome\\n"   (liga o acesso pela internet;
                             só aceito pela rede de casa, nunca por quem já entrou pela internet)
 """
 
@@ -154,6 +154,8 @@ class Ajustes:
                     conn.sendall(b"3DSR" + struct.pack("<I", 0))
                     continue
                 token, topico = servico.parear()
-                texto = f"{token}\n{topico}\n".encode()
+                # o mesmo nome que a descoberta manda, para o 3DS reconhecer este PC na rede
+                nome = socket.gethostname()[:30]
+                texto = f"{token}\n{topico}\n{nome}\n".encode()
                 print("Ajustes: 3DS pareado para acesso pela internet")
                 conn.sendall(b"3DSR" + struct.pack("<I", len(texto)) + texto)

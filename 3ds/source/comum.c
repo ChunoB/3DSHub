@@ -21,6 +21,7 @@ char nomePC[32];
 char caminhoApp[256] = "sdmc:/3ds/3dshub.3dsx";
 bool sairDoApp;
 bool modoRemoto;
+bool redeMudou;
 void (*aoEsperarRede)(void);
 
 // ---------------------------------------------------------------- IP

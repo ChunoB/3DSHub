@@ -24,49 +24,113 @@ typedef struct {
     int inicio, quantas;                // fila de mensagens (UDP)
 } Tunel;
 
+typedef struct { char nome[32], token[100], topico[64]; } PCPareado;
+
 static Tunel tuneis[MAX_TUNEIS];
-static char token[200], topico[200], endereco[200], enderecoFixo[200];
+static PCPareado pcs[TUNEL_MAX_PCS];
+static int npcs, atual = -1;
+static char endereco[200], enderecoFixo[200];
 static bool carregado;
 
-// ---------------------------------------------------------------- pareamento
+// ---------------------------------------------------------------- PCs pareados
+// Arquivo: uma linha "pc=nome<TAB>token<TAB>topico" por PC e "atual=topico" (o último
+// usado). As linhas "token=" e "topico=" da versão 1.2 (um PC só) ainda são lidas.
+
+static void salvarArquivo(void) {
+    FILE *f = fopen(ARQ_REMOTO, "w");
+    if (!f) return;
+    for (int i = 0; i < npcs; i++) fprintf(f, "pc=%s\t%s\t%s\n", pcs[i].nome, pcs[i].token, pcs[i].topico);
+    if (atual >= 0) fprintf(f, "atual=%s\n", pcs[atual].topico);
+    if (enderecoFixo[0]) fprintf(f, "url=%s\n", enderecoFixo);
+    fclose(f);
+}
 
 static void carregar(void) {
     if (carregado) return;
     carregado = true;
-    token[0] = topico[0] = enderecoFixo[0] = 0;
+    npcs = 0;
+    atual = -1;
+    enderecoFixo[0] = 0;
+    char tokenAntigo[100] = "", topicoAntigo[64] = "", topicoAtual[64] = "";
     FILE *f = fopen(ARQ_REMOTO, "r");
     if (!f) return;
-    char l[200];
+    char l[300];
     while (fgets(l, sizeof(l), f)) {
         l[strcspn(l, "\r\n")] = 0;
-        if (!strncmp(l, "token=", 6)) snprintf(token, sizeof(token), "%s", l + 6);
-        else if (!strncmp(l, "topico=", 7)) snprintf(topico, sizeof(topico), "%s", l + 7);
-        else if (!strncmp(l, "url=", 4)) snprintf(enderecoFixo, sizeof(enderecoFixo), "%s", l + 4);   // para testes
+        if (!strncmp(l, "pc=", 3) && npcs < TUNEL_MAX_PCS) {
+            char *nome = l + 3, *tok = strchr(nome, '\t'), *top = tok ? strchr(tok + 1, '\t') : NULL;
+            if (!tok || !top) continue;
+            *tok++ = 0;
+            *top++ = 0;
+            PCPareado *p = &pcs[npcs++];
+            snprintf(p->nome, sizeof(p->nome), "%.31s", nome);
+            snprintf(p->token, sizeof(p->token), "%.99s", tok);
+            snprintf(p->topico, sizeof(p->topico), "%.63s", top);
+        } else if (!strncmp(l, "atual=", 6)) snprintf(topicoAtual, sizeof(topicoAtual), "%.63s", l + 6);
+        else if (!strncmp(l, "token=", 6)) snprintf(tokenAntigo, sizeof(tokenAntigo), "%.99s", l + 6);
+        else if (!strncmp(l, "topico=", 7)) snprintf(topicoAntigo, sizeof(topicoAntigo), "%.63s", l + 7);
+        else if (!strncmp(l, "url=", 4)) snprintf(enderecoFixo, sizeof(enderecoFixo), "%.199s", l + 4);   // para testes
     }
     fclose(f);
+    if (!npcs && tokenAntigo[0]) {          // pareado na versão 1.2
+        snprintf(pcs[0].nome, sizeof(pcs[0].nome), "PC de casa");
+        snprintf(pcs[0].token, sizeof(pcs[0].token), "%s", tokenAntigo);
+        snprintf(pcs[0].topico, sizeof(pcs[0].topico), "%s", topicoAntigo);
+        npcs = 1;
+    }
+    for (int i = 0; i < npcs; i++) if (!strcmp(pcs[i].topico, topicoAtual)) atual = i;
+    if (atual < 0 && npcs) atual = 0;
 }
 
 bool tunelPareado(void) {
     carregar();
-    return token[0] && (topico[0] || enderecoFixo[0]);
+    return atual >= 0;
 }
 
-bool tunelSalvar(const char *t, const char *p) {
-    FILE *f = fopen(ARQ_REMOTO, "w");
-    if (!f) return false;
-    fprintf(f, "token=%s\ntopico=%s\n", t, p);
-    fclose(f);
-    carregado = false;
-    endereco[0] = 0;
+int tunelQuantos(void) { carregar(); return npcs; }
+const char *tunelNomePC(int i) { carregar(); return i >= 0 && i < npcs ? pcs[i].nome : ""; }
+int tunelAtual(void) { carregar(); return atual; }
+
+int tunelIndice(const char *nome) {
     carregar();
+    for (int i = 0; i < npcs; i++) if (!strcmp(pcs[i].nome, nome)) return i;
+    return -1;
+}
+
+void tunelEscolher(int i) {
+    carregar();
+    if (i < 0 || i >= npcs || i == atual) return;
+    atual = i;
+    endereco[0] = 0;            // outro PC, outro endereço
+    salvarArquivo();
+}
+
+bool tunelSalvar(const char *nome, const char *t, const char *p) {
+    carregar();
+    // o mesmo PC pareado de novo substitui o antigo
+    int i = 0;
+    while (i < npcs && strcmp(pcs[i].nome, nome) && strcmp(pcs[i].topico, p)) i++;
+    if (i == npcs) {
+        if (npcs == TUNEL_MAX_PCS) return false;
+        npcs++;
+    }
+    snprintf(pcs[i].nome, sizeof(pcs[i].nome), "%s", nome[0] ? nome : "PC");
+    snprintf(pcs[i].token, sizeof(pcs[i].token), "%s", t);
+    snprintf(pcs[i].topico, sizeof(pcs[i].topico), "%s", p);
+    atual = i;
+    endereco[0] = 0;
+    salvarArquivo();
     return true;
 }
 
-void tunelEsquecer(void) {
-    remove(ARQ_REMOTO);
-    carregado = false;
-    endereco[0] = 0;
+void tunelEsquecer(int i) {
     carregar();
+    if (i < 0 || i >= npcs) return;
+    memmove(&pcs[i], &pcs[i + 1], (npcs - i - 1) * sizeof(PCPareado));
+    npcs--;
+    if (atual == i) { atual = npcs ? 0 : -1; endereco[0] = 0; }
+    else if (atual > i) atual--;
+    salvarArquivo();
 }
 
 const char *tunelEndereco(void) { return endereco; }
@@ -95,9 +159,9 @@ static size_t guardar(char *p, size_t sz, size_t n, void *ud) {
 bool tunelBuscarEndereco(void) {
     carregar();
     if (enderecoFixo[0]) { snprintf(endereco, sizeof(endereco), "%s", enderecoFixo); return true; }
-    if (!topico[0]) return false;
+    if (atual < 0) return false;
     char url[300];
-    snprintf(url, sizeof(url), "https://ntfy.sh/%s/raw?poll=1", topico);
+    snprintf(url, sizeof(url), "https://ntfy.sh/%s/raw?poll=1", pcs[atual].topico);
     CURL *c = curl_easy_init();
     if (!c) return false;
     Mem m = {0};
@@ -288,7 +352,7 @@ int tunelAbrir(int porta, bool datagramas, int timeoutMs) {
     int n = snprintf(pedido, sizeof(pedido),
                      "GET /t?porta=%d HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                      "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\nAuthorization: Bearer %s\r\n"
-                     "User-Agent: 3DSHub/" APP_VERSION "\r\n\r\n", porta, host, chave64, token);
+                     "User-Agent: 3DSHub/" APP_VERSION "\r\n\r\n", porta, host, chave64, atual >= 0 ? pcs[atual].token : "");
     if (!enviarBruto(t, (const u8 *)pedido, n, timeoutMs)) { liberar(t); return -1; }
 
     // resposta: espera o "101" e guarda o que vier depois do cabeçalho

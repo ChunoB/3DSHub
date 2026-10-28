@@ -33,7 +33,7 @@ static const Linha linhas[] = {
     { DIGITAR_IP, "Digitar o IP do PC", NULL, NULL,
       "Para quando a busca não acha o PC. O IP\naparece no menu do ícone do 3DS Hub no PC.", 0, 0, 0 },
     { REMOTO,     "Acesso pela internet", NULL, NULL,
-      "Usa o 3DS Hub longe de casa: se o PC não está\nna rede, ele conecta pela internet sozinho.\nPareie em casa, na mesma rede do PC.", 0, 0, 0 },
+      "Pareia o PC conectado agora (mesma rede) para\nele aparecer em \"Procurar o PC\" e conectar\nsozinho longe de casa. Vale para vários PCs.", 0, 0, 0 },
     { ATUALIZAR_NET, "Atualizar pela internet", NULL, NULL,
       "Baixa do GitHub a versão mais nova do 3DS Hub\n(precisa de internet no Wi-Fi do 3DS).", 0, 0, 0 },
     { ATUALIZAR,  "Atualizar pelo PC", NULL, NULL,
@@ -136,8 +136,8 @@ static void lerConfiguracoes(void) {
 
 static void conectar(void) {
     desconectar();
-    if (!ipPC[0]) return;
-    desenharMensagem("Conectando ao PC...", ipPC, -1, "B ou START: cancelar");
+    if (!ipPC[0] && !modoRemoto) return;
+    desenharMensagem("Conectando ao PC...", modoRemoto ? "pela internet" : ipPC, -1, "B ou START: cancelar");
     sock = conectarTCP(PORTA, 3000);
     if (sock < 0) {
         sock = -1;
@@ -164,42 +164,68 @@ static void gravar(int i) {
 
 // ---------------------------------------------------------------- procurar o PC
 
+// A lista mostra os PCs que responderam nesta rede (conexão direta) e, embaixo, os PCs
+// pareados para a internet. Escolher um da internet passa a usar o túnel na hora.
+// Um PC pareado que também está nesta rede aparece só uma vez, pela rede (mais rápido).
+#define LINHAS_VISIVEIS 5
+
 static bool procurarPC(void) {
     int s = descobertaAbrir();
-    if (s < 0) return false;
     char ips[6][32], nomes[6][32];
-    int n = 0, sel = 0;
+    int n = 0, sel = 0, topo = 0;
     u64 inicio = osGetTime(), ultimaPergunta = 0;
     bool escolheu = false;
 
     while (aptMainLoop()) {
+        // PCs da internet que não estão nesta rede
+        int remotos[TUNEL_MAX_PCS], nr = 0;
+        for (int k = 0; k < tunelQuantos(); k++) {
+            bool aqui = false;
+            for (int i = 0; i < n; i++) aqui |= !strcmp(nomes[i], tunelNomePC(k));
+            if (!aqui) remotos[nr++] = k;
+        }
+        int total = n + nr;
+        if (sel >= total) sel = total ? total - 1 : 0;
+
         hidScanInput();
         u32 down = hidKeysDown();
         touchPosition tp;
         hidTouchRead(&tp);
         if (down & (KEY_B | KEY_START)) break;
         if ((down & KEY_DUP) && sel > 0) sel--;
-        if ((down & KEY_DDOWN) && sel < n - 1) sel++;
+        if ((down & KEY_DDOWN) && sel < total - 1) sel++;
+        if (sel < topo) topo = sel;
+        if (sel >= topo + LINHAS_VISIVEIS) topo = sel - LINHAS_VISIVEIS + 1;
         int escolha = -1;
-        if ((down & KEY_A) && n > 0) escolha = sel;
+        if ((down & KEY_A) && total > 0) escolha = sel;
         if (down & KEY_TOUCH)
-            for (int i = 0; i < n; i++)
-                if (uiDentro(&tp, 10, 40 + i * 34, 300, 30)) escolha = i;
-        if (escolha >= 0) {
+            for (int i = topo; i < total && i < topo + LINHAS_VISIVEIS; i++)
+                if (uiDentro(&tp, 10, 40 + (i - topo) * 34, 300, 30)) escolha = i;
+        if (escolha >= 0 && escolha < n) {               // nesta rede: conexão direta
             definirIP(ips[escolha]);
             snprintf(nomePC, sizeof(nomePC), "%s", nomes[escolha]);
+            if (modoRemoto) { modoRemoto = false; redeMudou = true; }
+            escolheu = true;
+            break;
+        }
+        if (escolha >= n) {                              // pela internet
+            int k = remotos[escolha - n];
+            tunelEscolher(k);
+            snprintf(nomePC, sizeof(nomePC), "%s", tunelNomePC(k));
+            modoRemoto = true;
+            redeMudou = true;
             escolheu = true;
             break;
         }
 
         // pergunta a cada meio segundo nos primeiros 4 segundos
         bool procurando = osGetTime() - inicio < 4000;
-        if (procurando && osGetTime() - ultimaPergunta > 500) {
+        if (s >= 0 && procurando && osGetTime() - ultimaPergunta > 500) {
             descobertaPerguntar(s);
             ultimaPergunta = osGetTime();
         }
         char ip[32], nome[32];
-        while (n < 6 && descobertaResposta(s, ip, sizeof(ip), nome, sizeof(nome))) {
+        while (s >= 0 && n < 6 && descobertaResposta(s, ip, sizeof(ip), nome, sizeof(nome))) {
             bool repetido = false;
             for (int i = 0; i < n; i++) repetido |= !strcmp(ips[i], ip);
             if (repetido) continue;
@@ -211,23 +237,28 @@ static bool procurarPC(void) {
         uiQuadro();
         uiTela(alvoCima);
         uiBarraStatus("Ajustes", IC_ENGRENAGEM, COR_TEXTO2);
-        uiTexto(200, 70, 20, COR_TEXTO, CENTRO, 0, "%s", procurando ? "Procurando PCs..." :
-                n ? "Escolha o PC" : "Nenhum PC respondeu");
-        uiTexto(200, 104, 13, COR_TEXTO2, CENTRO, 0, "%s", n || procurando
-                ? "PCs com o 3DS Hub aberto na mesma rede."
+        uiTexto(200, 70, 20, COR_TEXTO, CENTRO, 0, "%s", total ? "Escolha o PC" :
+                procurando ? "Procurando PCs..." : "Nenhum PC encontrado");
+        uiTexto(200, 104, 13, COR_TEXTO2, CENTRO, 0, "%s", total || procurando
+                ? "Nesta rede: conexão direta (mais rápida).\nPela internet: os PCs que você pareou."
                 : "Confira se o 3DS Hub está aberto no PC e se\no 3DS e o PC estão na mesma rede (ou hotspot).");
+        if (procurando && total) uiTexto(200, 150, 13, COR_MUDO, CENTRO, 0, "Ainda procurando nesta rede...");
         uiTela(alvoBaixo);
-        uiTexto(10, 12, 13, COR_MUDO, ESQ, 0, "PCs encontrados");
-        for (int i = 0; i < n; i++) {
+        uiTexto(10, 12, 13, COR_MUDO, ESQ, 0, "PCs (%d)", total);
+        for (int i = topo; i < total && i < topo + LINHAS_VISIVEIS; i++) {
             bool s2 = i == sel;
-            uiRetArred(10, 40 + i * 34, 300, 30, 8, s2 ? COR_VERDE_AGUA : COR_CARTAO);
-            uiTexto(20, 47 + i * 34, 13, s2 ? COR_AGUA_ESC : COR_TEXTO, ESQ, 170, "%s", nomes[i]);
-            uiTexto(300, 47 + i * 34, 13, s2 ? COR_AGUA_ESC : COR_MUDO, DIR, 0, "%s", ips[i]);
+            float y = 40 + (i - topo) * 34;
+            bool rede = i < n;
+            const char *nomeLinha = rede ? nomes[i] : tunelNomePC(remotos[i - n]);
+            bool emUso = !rede ? modoRemoto && remotos[i - n] == tunelAtual() : !modoRemoto && !strcmp(ips[i], ipPC);
+            uiRetArred(10, y, 300, 30, 8, s2 ? (rede ? COR_VERDE_AGUA : COR_AZUL) : COR_CARTAO);
+            uiTexto(20, y + 7, 13, s2 ? COR_BRANCO : COR_TEXTO, ESQ, 160, "%s%s", nomeLinha, emUso ? "  (em uso)" : "");
+            uiTexto(300, y + 7, 13, s2 ? COR_BRANCO : rede ? COR_MUDO : COR_AZUL_CL, DIR, 0, "%s", rede ? ips[i] : "pela internet");
         }
         uiTexto(160, 222, 11, COR_MUDO, CENTRO, 0, "A ou toque: escolher   B: voltar");
         uiFim();
     }
-    close(s);
+    if (s >= 0) close(s);
     return escolheu;
 }
 
@@ -409,19 +440,27 @@ static void esperarAtualizador(const char *titulo) {
 // Pareia em casa: o PC liga o acesso pela internet e manda o código e o canal secreto
 // (só pela rede de casa). Fica guardado no cartão SD.
 static void configurarRemoto(void) {
-    if (tunelPareado()) {
-        if (confirmar("Acesso pela internet", "Está ligado neste 3DS.\nQuer desligar (esquecer o código)?",
-                      "Desligar", "Manter"))
-            tunelEsquecer();
-        return;
-    }
+    char texto2[160];
     if (modoRemoto) {
-        uiAviso("Faça em casa", "Para parear, o 3DS e o PC precisam estar\nna mesma rede.", IC_X, COR_AMARELO);
+        // longe de casa só dá para esquecer o PC em uso; parear é sempre na mesma rede
+        int a = tunelAtual();
+        snprintf(texto2, sizeof(texto2), "Esquecer o PC \"%s\" neste 3DS?\nPara parear de novo, faça em casa.", tunelNomePC(a));
+        if (a >= 0 && confirmar("Acesso pela internet", texto2, "Esquecer", "Manter")) {
+            tunelEsquecer(a);
+            modoRemoto = false;
+            redeMudou = true;
+        }
         return;
     }
     if (sock < 0) conectar();
     if (sock < 0) {
-        uiAviso("Sem conexão", "Não consegui falar com o PC nesta rede.\nConfira o PC em Ajustes.", IC_X, COR_AMARELO);
+        uiAviso("Sem conexão", "Para parear, o 3DS e o PC precisam estar na\nmesma rede. Escolha o PC em \"Procurar o PC\".", IC_X, COR_AMARELO);
+        return;
+    }
+    int ja = nomePC[0] ? tunelIndice(nomePC) : -1;
+    if (ja >= 0) {
+        snprintf(texto2, sizeof(texto2), "O PC \"%s\" já está pareado.\nQuer esquecer este PC?", nomePC);
+        if (confirmar("Acesso pela internet", texto2, "Esquecer", "Manter")) tunelEsquecer(ja);
         return;
     }
     desenharMensagem("Pareando...", "Pedindo o código ao PC", -1, NULL);
@@ -440,12 +479,19 @@ static void configurarRemoto(void) {
     char *salvo = NULL;
     char *tok = strtok_r(texto, "\n", &salvo);
     char *top = strtok_r(NULL, "\n", &salvo);
-    if (!tok || !top || !tunelSalvar(tok, top)) {
+    char *nome = strtok_r(NULL, "\n", &salvo);      // o PC 1.2 não manda o nome
+    if (!nome || !*nome) nome = nomePC[0] ? nomePC : "PC";
+    if (tunelQuantos() >= TUNEL_MAX_PCS && tunelIndice(nome) < 0) {
+        uiAviso("Muitos PCs", "Este 3DS já tem 8 PCs pareados.\nEsqueça um antes de parear outro.", IC_X, COR_AMARELO);
+        return;
+    }
+    if (!tok || !top || !tunelSalvar(nome, tok, top)) {
         uiAviso("Não deu certo", "Não consegui gravar no cartão SD.", IC_X, COR_VERMELHO);
         return;
     }
-    uiAviso("Pronto!", "Longe de casa, o 3DS Hub acha este PC pela\ninternet sozinho. O PC precisa estar ligado\ncom o 3DS Hub aberto.",
-            IC_OK, COR_VERDE_AGUA);
+    if (!nomePC[0]) snprintf(nomePC, sizeof(nomePC), "%s", nome);
+    snprintf(texto2, sizeof(texto2), "\"%s\" agora aparece em \"Procurar o PC\"\nmesmo longe de casa. O PC precisa estar\nligado com o 3DS Hub aberto.", nome);
+    uiAviso("Pronto!", texto2, IC_OK, COR_VERDE_AGUA);
 }
 
 void atualizarPelaInternet(bool automatico) {
@@ -492,7 +538,10 @@ static void textoValor(int i, char *s, size_t n) {
     else if (l->tipo == DIGITAR_IP) snprintf(s, n, "%s", ipPC[0] ? ipPC : "-");
     else if (l->tipo == ATUALIZAR)  snprintf(s, n, "%s", envIsHomebrew() ? ".3dsx" : "CIA");
     else if (l->tipo == ATUALIZAR_NET) snprintf(s, n, "v%s", updater_version());
-    else if (l->tipo == REMOTO)     snprintf(s, n, "%s", modoRemoto ? "Em uso" : tunelPareado() ? "Ligado" : "Desligado");
+    else if (l->tipo == REMOTO) {
+        if (!tunelQuantos()) snprintf(s, n, "Nenhum PC");
+        else snprintf(s, n, "%d PC%s%s", tunelQuantos(), tunelQuantos() > 1 ? "s" : "", modoRemoto ? " (em uso)" : "");
+    }
     else if (!temValores)           snprintf(s, n, "-");
     else if (l->tipo == SIM_NAO)    snprintf(s, n, "%s", valores[i] ? "Sim" : "Não");
     else                            snprintf(s, n, "%g %s", valores[i], l->unidade);
