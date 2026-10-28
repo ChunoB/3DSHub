@@ -41,7 +41,7 @@ PORTA_PORTAO = 5011
 PORTAS_TCP = {5007, 5008, 5010}       # Câmera, Espelho, Ajustes
 PORTAS_UDP = {5005, 5006}             # Controle, Segunda Tela
 REPUBLICAR_S = 3 * 3600               # o ntfy guarda as mensagens por 12 h
-GUID_WS = b"258EAFA5-E914-47DA-95CA-C5AB0DC11B65"
+GUID_WS = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"   # fixo, do padrão WebSocket (RFC 6455)
 
 _instancia = None
 
@@ -238,6 +238,8 @@ class Remoto:
                 self._parar.wait(60)
                 continue
             for linha in self.processo.stderr:
+                if os.environ.get("HUB_DEBUG"):
+                    print("cloudflared:", linha.rstrip())
                 m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", linha)
                 if m and m.group(0) != self.status["url"]:
                     self.status["url"] = m.group(0)
@@ -262,6 +264,8 @@ class Remoto:
             escritor.close()
             return
         linhas = cab.decode("latin-1").split("\r\n")
+        if os.environ.get("HUB_DEBUG"):
+            print("portao: pedido:", " | ".join(l for l in linhas if not l.lower().startswith("authorization")))
         cabecalhos = {}
         for l in linhas[1:]:
             if ":" in l:
