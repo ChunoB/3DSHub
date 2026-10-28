@@ -53,7 +53,16 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.3.0)
+O QUE MUDOU NESTA VERSAO (1.3.1)
+- O app fecha na hora: antes podia demorar ate 20 segundos esperando a
+  busca de versao nova ou a conexao pela internet terminar.
+- Enquanto conecta pela internet, START sai do app.
+- Volta o que o Controle ganhou em 27/10 e tinha ficado de fora da 1.3.0:
+  perfis Genshin Impact, It Takes Two e Parsec, toque como gatilhos LT/RT,
+  sensibilidade do analogico direito (ajustavel pelo 3DS) e LoL com cursor.
+- Atualize tambem a pasta pc do PC.
+
+VERSAO 1.3.0
 - Varios PCs pela internet: pareie quantos quiser (ate 8) e escolha em
   Ajustes > Procurar o PC, junto com os PCs da rede.
 - Atualize tambem a pasta pc do PC para o 3DS guardar o nome dele.

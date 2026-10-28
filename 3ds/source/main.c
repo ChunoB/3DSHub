@@ -120,7 +120,7 @@ static void rodarRemoto(bool temIP) {
         // espera a rede de casa ter uma chance antes de ir pela internet
         if (agora - inicioApp < 6000 || hubRespondendo() || agora < proximaTentativaRemota) return;
         proximaTentativaRemota = agora + 60000;
-        mensagemRapida("Procurando o PC pela internet...", "O PC não respondeu nesta rede.");
+        mensagemRapida("Procurando o PC pela internet...", "O PC não respondeu nesta rede. START = sair");
         if (!tunelBuscarEndereco()) return;
         fecharSondaDeVez();
         modoRemoto = true;
@@ -135,8 +135,8 @@ static void rodarRemoto(bool temIP) {
         snprintf(aviso, sizeof(aviso), "Conectado ao PC pela internet");
         avisoAte = osGetTime() + 4000;
     } else if (sonda < 0 && agora >= proximaTentativaRemota) {
-        proximaTentativaRemota = agora + 10000;
-        mensagemRapida("Reconectando pela internet...", "");
+        proximaTentativaRemota = agora + 20000;
+        mensagemRapida("Reconectando pela internet...", "START = sair");
         abrirSonda();
     }
 }
@@ -258,7 +258,8 @@ int main(int argc, char **argv) {
         u32 down = hidKeysDown();
         int abrir = -1;
 
-        if (down & KEY_START) break;
+        // apertouStart: START durante uma conexão pela internet (que segura o menu)
+        if ((down & KEY_START) || apertouStart) break;
         if (down & KEY_DLEFT)  sel = sel % 2 ? sel - 1 : sel;
         if (down & KEY_DRIGHT) sel = sel % 2 ? sel : sel + 1;
         if (down & KEY_DUP)    sel = sel >= 2 ? sel - 2 : sel;
@@ -302,6 +303,7 @@ int main(int argc, char **argv) {
             } else {
                 fecharSonda();
                 it->abrir();
+                apertouStart = false;       // o START dentro do módulo era para sair dele
                 ultimaRespostaHub = 0;
                 if (redeMudou) {            // nos Ajustes escolheu outro PC (ou casa/internet)
                     redeMudou = false;
@@ -318,7 +320,7 @@ int main(int argc, char **argv) {
     }
 
     updater_exit();
-    fecharSonda();
+    fecharSondaDeVez();             // pela internet a sonda é um túnel: fecha também
     if (descoberta >= 0) close(descoberta);
     if (rede) {
         // derruba na hora qualquer socket ainda aberto: sem isso o encerramento

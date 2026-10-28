@@ -23,6 +23,14 @@ bool sairDoApp;
 bool modoRemoto;
 bool redeMudou;
 void (*aoEsperarRede)(void);
+bool apertouStart;
+
+bool desistirDaRede(void) {
+    if (aptShouldClose()) return true;
+    hidScanInput();
+    if (hidKeysHeld() & KEY_START) apertouStart = true;
+    return apertouStart;
+}
 
 // ---------------------------------------------------------------- IP
 

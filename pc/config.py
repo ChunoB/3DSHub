@@ -20,6 +20,7 @@ PADRAO = {
         "giro_inverter_horizontal": False,
         "giro_inverter_vertical": False,
         "camera_pixels_por_quadro": 15,   # modo teclado: analógico direito -> mouse (no máximo)
+        "analogico_direito_sensibilidade": 1.0,  # C-stick / analógico de toque: multiplica o valor
         "giro_pausar_no_toque": True,     # dedo na tela pausa o giroscópio ("levantar o mouse")
         "giro_l_r_como_cliques": True,    # modo controle + giroscópio no mouse: L/R = cliques
     },
@@ -28,6 +29,8 @@ PADRAO = {
     # programa da lista está em primeiro plano (nome do .exe).
     #   modo: "controle" (Xbox 360 virtual) ou "teclado"
     #   giroscopio: "mouse" ou "analogico_direito"
+    #   toque (só modo controle, app novo do 3DS): "mouse" (touchpad), "gatilhos"
+    #     (metade esquerda/direita = LT/RT) ou "controle" (LT RT LB RB + analógico direito)
     #   analogico (só modo teclado): "wasd", "setas", "mouse" ou "nada"
     #   teclas (só modo teclado): botão do 3DS -> tecla
     #     teclas: uma letra, space, shift, ctrl, alt, tab, esc, enter,
@@ -67,6 +70,7 @@ PADRAO = {
             "nome": "League of Legends",
             "processos": ["League of Legends.exe"],
             "modo": "teclado",
+            "mouse": "cursor",          # o LoL ignora o mouse simulado: teleporta o cursor
             "giroscopio": "mouse",
             "analogico": "mouse",
             "teclas": {
@@ -83,6 +87,36 @@ PADRAO = {
                 "ESQUERDA": "4 (sentinela)", "START": "Esc (menu)", "SELECT": "Tab (placar)",
                 "ZL": "Espaço (câmera)", "ZR": "Ctrl (subir skill)", "CIRCLE": "Cursor",
             },
+        },
+        {
+            # Genshin no controle: L/R = LB/RB; tocar na metade esquerda/direita da
+            # tela de baixo = LT/RT (3DS sem ZL/ZR); giroscópio mexe a câmera
+            "nome": "Genshin Impact",
+            "processos": ["GenshinImpact.exe", "YuanShen.exe"],
+            "modo": "controle",
+            "l_r_como_gatilhos": False,
+            "toque": "gatilhos",
+            "giroscopio": "analogico_direito",
+        },
+        {
+            # It Takes Two: L/R = LB/RB; a tela de baixo do 3DS vira LT RT LB RB +
+            # analógico direito; giroscópio também mexe a câmera
+            "nome": "It Takes Two",
+            "processos": ["ItTakesTwo.exe"],
+            "modo": "controle",
+            "l_r_como_gatilhos": False,
+            "toque": "controle",
+            "giroscopio": "analogico_direito",
+        },
+        {
+            # controlar outro PC pelo Parsec: o controle de Xbox daqui vai junto pelo
+            # Parsec (lá aparece como um Xbox 360); o giroscópio vai no analógico
+            # direito para também passar pelo controle
+            "nome": "Parsec",
+            "processos": ["parsecd.exe"],
+            "modo": "controle",
+            "l_r_como_gatilhos": False,
+            "giroscopio": "analogico_direito",
         },
     ],
 

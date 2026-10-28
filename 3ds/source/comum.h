@@ -31,6 +31,11 @@ bool descobertaResposta(int sock, char *ip, size_t nIp, char *nome, size_t nNome
 // um módulo continuar lendo botões e toque nessas esperas. NULL = nada.
 extern void (*aoEsperarRede)(void);
 
+// Esperas longas (túnel pela internet): true se o usuário apertou START ou fechou o
+// app pelo HOME, para desistir na hora. O START fica guardado em apertouStart.
+bool desistirDaRede(void);
+extern bool apertouStart;
+
 u32 crc32(u32 crc, const void *dados, size_t n);  // igual ao zlib.crc32 (comece com 0)
 
 // Rede. Com modoRemoto ligado (o PC não está na mesma rede), as mesmas funções usam o

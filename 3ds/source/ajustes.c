@@ -50,6 +50,8 @@ static const Linha linhas[] = {
       "Ligue se a mira sobe quando você inclina o\nconsole para baixo.", 0, 0, 1 },
     { NUMERO,     "Touchpad: velocidade", "sensibilidade_toque", "x",
       "Quanto o mouse anda para cada pixel que o\ndedo anda na tela de toque.", 0.25f, 0.25f, 10 },
+    { NUMERO,     "Analógico direito: sensib.", "analogico_direito_sensibilidade", "x",
+      "C-stick e analógico de toque (SELECT+X).\nMaior = chega no máximo mexendo menos.", 0.1f, 0.2f, 4 },
 };
 #define N_LINHAS (int)(sizeof(linhas) / sizeof(linhas[0]))
 

@@ -31,6 +31,7 @@ CHAVES = {
     "giro_inverter_horizontal": (bool, 0, 1),
     "giro_inverter_vertical":   (bool, 0, 1),
     "sensibilidade_toque":      (float, 0.25, 10),
+    "analogico_direito_sensibilidade": (float, 0.2, 4),
 }
 
 ARQUIVOS = {   # onde procurar o app (o mais novo vence): pasta do projeto e pasta do pacote

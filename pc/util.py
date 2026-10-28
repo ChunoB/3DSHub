@@ -60,11 +60,22 @@ class _Input(ctypes.Structure):
     _fields_ = [("type", ctypes.c_ulong), ("u", _U)]
 
 
+# Como mover o mouse, por perfil ("mouse" no perfil; o Controle troca a cada pacote):
+#   False ("relativo", padrão): como um mouse de verdade (SendInput). Precisa nos jogos
+#       que leem o mouse direto (Raw Input, ex. Minecraft), que ignoram o teleporte.
+#   True ("cursor"): teleporta o cursor (SetCursorPos). Precisa no LoL, que ignora o
+#       mouse simulado (testado: SendInput não mexe nada com o jogo na frente).
+modo_cursor = False
+
+
 def mover(dx, dy):
-    """Move o mouse como um mouse de verdade (relativo, via SendInput).
-    O mouse.move do pynput 'teletransporta' o cursor (SetCursorPos), e jogos que
-    leem o mouse direto (Raw Input, ex. Minecraft) ignoram isso: a câmera não gira."""
+    """Move o mouse dx, dy pixels, do jeito escolhido em modo_cursor."""
     if not dx and not dy:
+        return
+    if modo_cursor:
+        p = _Ponto()
+        ctypes.windll.user32.GetCursorPos(ctypes.byref(p))
+        ctypes.windll.user32.SetCursorPos(p.x + int(dx), p.y + int(dy))
         return
     entrada = _Input(type=0)                       # INPUT_MOUSE
     entrada.mi = _MouseInput(dx=int(dx), dy=int(dy), dwFlags=0x0001)   # MOUSEEVENTF_MOVE

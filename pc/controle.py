@@ -10,6 +10,7 @@ import vgamepad as vg
 import win32gui
 import win32process
 
+import util
 from util import Button, apertar, mouse, mover, soltar, tecla
 
 PORTA = 5005
@@ -264,7 +265,13 @@ def legenda(perfil, teclado, cliques, config):
         textos.update({
             "A": "A", "B": "B", "X": "X", "Y": "Y", "START": "Start", "SELECT": "Back",
             "CIMA": "Direcional", "BAIXO": "Direcional", "ESQUERDA": "Direcional", "DIREITA": "Direcional",
-            "L": "LT" if gatilhos else "LB", "R": "RT" if gatilhos else "RB", "ZL": "LT", "ZR": "RT",
+            "L": "LT" if gatilhos else "LB", "R": "RT" if gatilhos else "RB",
+            "ZL": "LB" if gatilhos else "LT", "ZR": "RB" if gatilhos else "RT",
+            **({"ZL": "LT = toque esquerda", "ZR": "RT = toque direita"}
+               if perfil.get("toque") == "gatilhos" else {}),
+            **({"ZL": "LT (tela de baixo)", "ZR": "RT (tela de baixo)",
+                "CSTICK": "Analógico direito (tela de baixo)"}
+               if perfil.get("toque") == "controle" else {}),
             "CIRCLE": "Analógico esquerdo", "CSTICK": "Analógico direito",
         })
         if cliques:              # giroscópio no mouse: L/R viram os cliques
@@ -303,21 +310,25 @@ class Controle:
         self.teclas.soltar_tudo()
         self.cliques.soltar_tudo()
 
-    def _gamepad(self, perfil, keys, cx, cy, sx, sy, giro_x, giro_y, cliques=False):
+    def _gamepad(self, perfil, keys, cx, cy, sx, sy, giro_x, giro_y, cliques=False,
+                 lt_toque=False, rt_toque=False):
         if cliques:                     # L e R estão sendo os cliques do mouse
             keys &= ~(BITS["L"] | BITS["R"])
         gatilhos = perfil.get("l_r_como_gatilhos", False)
         for nome, botao in MAPA_XBOX.items():
             (self.pad.press_button if keys & BITS[nome] else self.pad.release_button)(button=botao)
-        for nome, botao in (("L", XB.XUSB_GAMEPAD_LEFT_SHOULDER), ("R", XB.XUSB_GAMEPAD_RIGHT_SHOULDER)):
-            (self.pad.press_button if keys & BITS[nome] and not gatilhos else self.pad.release_button)(button=botao)
-        lt = keys & BITS["ZL"] or (gatilhos and keys & BITS["L"])
-        rt = keys & BITS["ZR"] or (gatilhos and keys & BITS["R"])
+        # l_r_como_gatilhos: L/R = LT/RT e ZL/ZR (New 3DS) = LB/RB
+        ombros = ("ZL", "ZR") if gatilhos else ("L", "R")
+        for nome, botao in zip(ombros, (XB.XUSB_GAMEPAD_LEFT_SHOULDER, XB.XUSB_GAMEPAD_RIGHT_SHOULDER)):
+            (self.pad.press_button if keys & BITS[nome] else self.pad.release_button)(button=botao)
+        lt = keys & BITS["L" if gatilhos else "ZL"] or lt_toque
+        rt = keys & BITS["R" if gatilhos else "ZR"] or rt_toque
         self.pad.left_trigger(value=255 if lt else 0)
         self.pad.right_trigger(value=255 if rt else 0)
         self.pad.left_joystick(x_value=eixo(cx, CIRCLE_MAX), y_value=eixo(cy, CIRCLE_MAX))
-        rx = max(-32768, min(32767, eixo(sx, CSTICK_MAX) + giro_x))
-        ry = max(-32768, min(32767, eixo(sy, CSTICK_MAX) + giro_y))
+        sens = self.config["controle"].get("analogico_direito_sensibilidade", 1.0)
+        rx = max(-32768, min(32767, int(eixo(sx, CSTICK_MAX) * sens) + giro_x))
+        ry = max(-32768, min(32767, int(eixo(sy, CSTICK_MAX) * sens) + giro_y))
         self.pad.right_joystick(x_value=rx, y_value=ry)
         self.pad.update()
 
@@ -404,6 +415,7 @@ class Controle:
         dt = 1 / 60
 
         perfil = self.detector.perfil()
+        util.modo_cursor = perfil.get("mouse") == "cursor"   # LoL: teleporta o cursor
         teclado = perfil.get("modo") == "teclado" or flags & FLAG_TECLADO
         modo = "teclado" if teclado else "controle"
         if modo != modo_antes:          # trocou de modo: nada fica preso
@@ -412,9 +424,16 @@ class Controle:
         self.status["perfil"] = f"{perfil.get('nome', '?')} ({modo})"
 
         cfg = self.config["controle"]
+        # "toque": "gatilhos" (3DS sem ZL/ZR): metade esquerda da tela = LT, direita = RT
+        # (o app novo já manda o toque como botões e tocando=0; isto é para o app antigo)
+        modo_toque = perfil.get("toque", "mouse") if not teclado else "mouse"
+        toque_gatilhos = modo_toque in ("gatilhos", "controle")
+        lt_toque = modo_toque == "gatilhos" and bool(tocando) and tx < 160
+        rt_toque = modo_toque == "gatilhos" and bool(tocando) and tx >= 160
         giro_ligado = bool(flags & FLAG_GIRO)
         giro_x = giro_y = 0
-        if giro_ligado and tocando and cfg.get("giro_pausar_no_toque", True):
+        if (giro_ligado and tocando and not toque_gatilhos
+                and cfg.get("giro_pausar_no_toque", True)):
             # dedo na tela = "levantar o mouse": o giroscópio pausa e dá pra
             # reposicionar o 3DS sem a câmera voltar junto
             self.acc_giro_x = self.acc_giro_y = 0.0
@@ -434,7 +453,8 @@ class Controle:
                 mover(int(eixo(cx, CIRCLE_MAX) / 32767 * 12),
                       int(-eixo(cy, CIRCLE_MAX) / 32767 * 12))
             # analógico direito (C-stick ou tela de toque no modo câmera) gira a câmera
-            vel = self.config["controle"].get("camera_pixels_por_quadro", 15)
+            vel = (self.config["controle"].get("camera_pixels_por_quadro", 15)
+                   * self.config["controle"].get("analogico_direito_sensibilidade", 1.0))
             self.acc_cam_x += eixo(sx, CSTICK_MAX) / 32767 * vel
             self.acc_cam_y -= eixo(sy, CSTICK_MAX) / 32767 * vel
             mx, my = int(self.acc_cam_x), int(self.acc_cam_y)
@@ -443,18 +463,22 @@ class Controle:
                 self.acc_cam_x -= mx
                 self.acc_cam_y -= my
         else:
-            self._gamepad(perfil, keys, cx, cy, sx, sy, giro_x, giro_y, cliques)
+            self._gamepad(perfil, keys, cx, cy, sx, sy, giro_x, giro_y, cliques,
+                          lt_toque, rt_toque)
 
-        self.touch.atualizar(bool(tocando), tx, ty)
+        # com o toque virando gatilho, ele não mexe o mouse
+        self.touch.atualizar(bool(tocando) and not toque_gatilhos, tx, ty)
 
         if agora - ultimo_ack > 0.2:
-            resposta = f"{str(perfil.get('nome', '?'))[:20]}\n{modo}".encode("ascii", "ignore")
+            # 3ª linha: o que a tela de toque faz (o app novo desenha LT/RT; o antigo ignora)
+            resposta = (f"{str(perfil.get('nome', '?'))[:20]}\n{modo}\n"
+                        f"{modo_toque}").encode("ascii", "ignore")
             self.sock.sendto(b"3DSA" + resposta, origem)
+            ultimo_ack = agora
 
         # legenda dos botões (tela de cima do 3DS): quando muda e a cada segundo
         texto = legenda(perfil, teclado, cliques, self.config)
         if texto != self.legenda_texto or agora - self.legenda_tempo > 1.0:
             self.sock.sendto(b"3DSM" + texto.encode("utf-8"), origem)
             self.legenda_texto, self.legenda_tempo = texto, agora
-            ultimo_ack = agora
         return modo_antes, ultimo_ack

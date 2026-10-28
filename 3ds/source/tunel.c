@@ -137,6 +137,16 @@ const char *tunelEndereco(void) { return endereco; }
 
 // ---------------------------------------------------------------- endereço atual (ntfy)
 
+// curl: START ou fechar o app interrompe a conexão (senão a tela fica parada até 15 s)
+static int desistir(void *ud, curl_off_t a, curl_off_t b, curl_off_t c, curl_off_t d) {
+    return desistirDaRede();
+}
+
+static void podeCancelar(CURL *c) {
+    curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, desistir);
+}
+
 typedef struct { char *buf; size_t n, cap; } Mem;
 
 static size_t guardar(char *p, size_t sz, size_t n, void *ud) {
@@ -172,6 +182,7 @@ bool tunelBuscarEndereco(void) {
     curl_easy_setopt(c, CURLOPT_FAILONERROR, 1L);
     curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, guardar);
     curl_easy_setopt(c, CURLOPT_WRITEDATA, &m);
+    podeCancelar(c);
     CURLcode r = curl_easy_perform(c);
     curl_easy_cleanup(c);
     bool ok = false;
@@ -218,6 +229,7 @@ static bool esperarFd(curl_socket_t fd, short ev, u64 fim) {
         if (r > 0) return true;
         if (r < 0 || osGetTime() >= fim) return false;
         if (aoEsperarRede) aoEsperarRede();
+        else if (desistirDaRede()) return false;
     }
 }
 
@@ -334,6 +346,7 @@ int tunelAbrir(int porta, bool datagramas, int timeoutMs) {
     curl_easy_setopt(t->c, CURLOPT_CONNECT_ONLY, 1L);
     curl_easy_setopt(t->c, CURLOPT_CAINFO, CA);
     curl_easy_setopt(t->c, CURLOPT_CONNECTTIMEOUT_MS, (long)timeoutMs);
+    podeCancelar(t->c);
     if (curl_easy_perform(t->c) != CURLE_OK ||
         curl_easy_getinfo(t->c, CURLINFO_ACTIVESOCKET, &t->fd) != CURLE_OK || t->fd == CURL_SOCKET_BAD) {
         liberar(t);

@@ -9,7 +9,8 @@
     "giro_inverter_vertical": true,
     "camera_pixels_por_quadro": 15,
     "giro_pausar_no_toque": true,
-    "giro_l_r_como_cliques": true
+    "giro_l_r_como_cliques": true,
+    "analogico_direito_sensibilidade": 1.0
   },
   "perfis": [
     {
@@ -98,7 +99,38 @@
         "ZL": "Espaço (câmera)",
         "ZR": "Ctrl (subir skill)",
         "CIRCLE": "Cursor"
-      }
+      },
+      "mouse": "cursor"
+    },
+    {
+      "nome": "Genshin Impact",
+      "processos": [
+        "GenshinImpact.exe",
+        "YuanShen.exe"
+      ],
+      "modo": "controle",
+      "l_r_como_gatilhos": false,
+      "toque": "gatilhos",
+      "giroscopio": "analogico_direito"
+    },
+    {
+      "nome": "It Takes Two",
+      "processos": [
+        "ItTakesTwo.exe"
+      ],
+      "modo": "controle",
+      "l_r_como_gatilhos": false,
+      "toque": "controle",
+      "giroscopio": "analogico_direito"
+    },
+    {
+      "nome": "Parsec",
+      "processos": [
+        "parsecd.exe"
+      ],
+      "modo": "controle",
+      "l_r_como_gatilhos": false,
+      "giroscopio": "analogico_direito"
     }
   ],
   "teclado_padrao": {
