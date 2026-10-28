@@ -6,3 +6,4 @@ build/
 *.map
 __pycache__/
 ferramentas/
+dist/

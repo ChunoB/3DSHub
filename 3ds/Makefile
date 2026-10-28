@@ -34,14 +34,19 @@ include $(DEVKITARM)/3ds_rules
 TARGET		:=	3dshub
 APP_TITLE	:=	3DS Hub
 APP_DESCRIPTION	:=	Controle, Segunda Tela, Sintetizador, Camera e Espelho
-APP_AUTHOR	:=	Bruno
+APP_AUTHOR	:=	Bruno Bellini
+# version: bump it for every release (the in-app updater compares it with GitHub)
+VERSION_MAJOR	:=	1
+VERSION_MINOR	:=	1
+VERSION_MICRO	:=	0
+VERSION		:=	$(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_MICRO)
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
 INCLUDES	:=	include
 GRAPHICS	:=	gfx
 GFXBUILD	:=	$(BUILD)
-#ROMFS		:=	romfs
+ROMFS		:=	romfs
 #GFXBUILD	:=	$(ROMFS)/gfx
 
 #---------------------------------------------------------------------------------
@@ -53,14 +58,14 @@ CFLAGS	:=	-g -Wall -O2 -mword-relocations \
 			-ffunction-sections \
 			$(ARCH)
 
-CFLAGS	+=	$(INCLUDE) -D__3DS__
+CFLAGS	+=	$(INCLUDE) -D__3DS__ -DAPP_VERSION=\"$(VERSION)\"
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:= -ljpeg -lcitro2d -lcitro3d -lctru -lm
+LIBS	:= -ljpeg -lcitro2d -lcitro3d -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -lz -lctru -lm
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing

@@ -7,6 +7,7 @@
 //   START ou B : voltar ao menu
 
 #include "comum.h"
+#include "updater.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,7 +18,7 @@
 #define PORTA       5010
 #define ARQ_CRC_CIA "sdmc:/3ds/3dshub_cia.crc"   // versão do CIA instalado pela atualização
 
-enum { PROCURAR, DIGITAR_IP, ATUALIZAR, NUMERO, SIM_NAO };
+enum { PROCURAR, DIGITAR_IP, ATUALIZAR, ATUALIZAR_NET, NUMERO, SIM_NAO };
 
 typedef struct {
     int tipo;
@@ -30,8 +31,10 @@ static const Linha linhas[] = {
       "Pergunta para a rede quais PCs estão com o\n3DS Hub aberto e deixa você escolher um.", 0, 0, 0 },
     { DIGITAR_IP, "Digitar o IP do PC", NULL, NULL,
       "Para quando a busca não acha o PC. O IP\naparece no menu do ícone do 3DS Hub no PC.", 0, 0, 0 },
-    { ATUALIZAR,  "Atualizar o app", NULL, NULL,
-      "Baixa do PC a versão mais nova do 3DS Hub,\nsem tirar o cartão SD.", 0, 0, 0 },
+    { ATUALIZAR_NET, "Atualizar pela internet", NULL, NULL,
+      "Baixa do GitHub a versão mais nova do 3DS Hub\n(precisa de internet no Wi-Fi do 3DS).", 0, 0, 0 },
+    { ATUALIZAR,  "Atualizar pelo PC", NULL, NULL,
+      "Baixa do PC a versão do 3DS Hub que está na\npasta do Hub, sem tirar o cartão SD.", 0, 0, 0 },
     { NUMERO,     "Giroscópio: velocidade", "giro_pixels_por_grau", "px/°",
       "Quanto a mira anda (no mouse) para cada grau\nque você gira o console. Maior = mais rápido.", 1, 1, 80 },
     { NUMERO,     "Giroscópio: analógico", "giro_analogico_graus", "°/s",
@@ -386,6 +389,47 @@ static void atualizar(void) {
         sairDoApp = true;
 }
 
+// ---------------------------------------------------------------- atualizar pela internet
+
+// Espera o atualizador terminar o que está fazendo, mostrando o progresso.
+static void esperarAtualizador(const char *titulo) {
+    while (aptMainLoop() && updater_busy()) {
+        hidScanInput();
+        UpdState st = updater_state();
+        float p = st == UPD_DOWNLOADING ? updater_progress() : -1;
+        desenharMensagem(titulo, updater_message(), p, NULL);
+    }
+}
+
+void atualizarPelaInternet(bool automatico) {
+    if (!automatico) {
+        updater_check();
+        esperarAtualizador("Procurando versão nova...");
+    }
+    UpdState st = updater_state();
+    if (st == UPD_UP_TO_DATE) {
+        if (!automatico) uiAviso("Tudo certo", updater_message(), IC_OK, COR_VERDE_AGUA);
+        return;
+    }
+    if (st != UPD_AVAILABLE) {
+        if (!automatico) uiAviso("Não deu para procurar", updater_message(), IC_X, COR_AMARELO);
+        return;
+    }
+    char texto[160];
+    snprintf(texto, sizeof(texto), "Versão %s disponível (você tem a %s).\nBaixar e instalar agora?",
+             updater_latest(), updater_version());
+    if (!confirmar("Versão nova disponível", texto, "Atualizar", "Agora não")) return;
+    updater_install();
+    esperarAtualizador("Baixando a versão nova...");
+    if (updater_state() != UPD_DONE) {
+        uiAviso("Não atualizou", updater_message(), IC_X, COR_VERMELHO);
+        return;
+    }
+    if (confirmar("Atualizado!", "A versão nova já está instalada.\nFeche e abra o 3DS Hub para usar.",
+                  "Fechar agora", "Depois"))
+        sairDoApp = true;
+}
+
 // ---------------------------------------------------------------- tela principal
 
 #define LINHA_H   26
@@ -400,6 +444,7 @@ static void textoValor(int i, char *s, size_t n) {
     if (l->tipo == PROCURAR)        snprintf(s, n, "%s", nomePC[0] ? nomePC : "");
     else if (l->tipo == DIGITAR_IP) snprintf(s, n, "%s", ipPC[0] ? ipPC : "-");
     else if (l->tipo == ATUALIZAR)  snprintf(s, n, "%s", envIsHomebrew() ? ".3dsx" : "CIA");
+    else if (l->tipo == ATUALIZAR_NET) snprintf(s, n, "v%s", updater_version());
     else if (!temValores)           snprintf(s, n, "-");
     else if (l->tipo == SIM_NAO)    snprintf(s, n, "%s", valores[i] ? "Sim" : "Não");
     else                            snprintf(s, n, "%g %s", valores[i], l->unidade);
@@ -503,6 +548,9 @@ void modAjustes(void) {
                 break;
             case ATUALIZAR:
                 atualizar();
+                break;
+            case ATUALIZAR_NET:
+                atualizarPelaInternet(false);
                 break;
             case SIM_NAO:
                 mudar(acao, 1);

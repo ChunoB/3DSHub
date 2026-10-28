@@ -14,6 +14,9 @@ extern char nomePC[32];             // nome do PC que respondeu à descoberta ("
 extern char caminhoApp[256];        // onde está o .3dsx que está rodando (para a atualização)
 extern bool sairDoApp;              // um módulo pediu para fechar o app (ex.: depois de atualizar)
 
+// Atualização pela internet (GitHub). automatico = a busca já foi feita ao abrir o app.
+void atualizarPelaInternet(bool automatico);
+
 // IP do PC (salvo em sdmc:/3ds/3dshub.cfg)
 void carregarIP(void);
 bool pedirIP(void);                 // teclado numérico; false se cancelar

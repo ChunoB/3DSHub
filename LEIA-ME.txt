@@ -24,10 +24,17 @@ O 3DS ACHA O PC SOZINHO
   digitar o IP na mao (ele aparece no menu do icone do Hub).
 
 ATUALIZAR SEM TIRAR O CARTAO
-- Deixe o 3dshub.3dsx/.cia novo na pasta do 3DS Hub no PC e, no 3DS,
-  va em Ajustes > Atualizar o app. Depois feche e abra o app.
+- Pela internet: ao abrir, o 3DS Hub procura versao nova no GitHub
+  sozinho e pergunta "Atualizar agora?". Na mao: Ajustes > Atualizar
+  pela internet. Depois feche e abra o app.
+- Pelo PC: deixe o 3dshub.3dsx/.cia novo na pasta do 3DS Hub no PC e,
+  no 3DS, va em Ajustes > Atualizar pelo PC.
+- Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO
+O QUE MUDOU NESTA VERSAO (1.1.0)
+- Atualizacao pela internet (GitHub), sozinha ao abrir ou em Ajustes.
+
+VERSAO 1.0.0
 - Descoberta automatica do PC e tela de Ajustes no 3DS (giroscopio,
   touchpad, procurar PC, digitar IP, atualizar o app).
 - Atualizacao do app pelo Wi-Fi (.3dsx e CIA).

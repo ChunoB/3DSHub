@@ -5,7 +5,9 @@
 // O menu procura o PC sozinho (descoberta na rede) sempre que o Hub não responde.
 
 #include "comum.h"
+#include "updater.h"
 
+#include <curl/curl.h>
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
@@ -158,11 +160,16 @@ int main(int argc, char **argv) {
     if (argc > 0 && argv[0] && !strncmp(argv[0], "sdmc:/", 6))
         snprintf(caminhoApp, sizeof(caminhoApp), "%s", argv[0]);
 
+    updater_init("ChunoB/3DSHub", APP_VERSION, "3dshub.3dsx", caminhoApp);
+    romfsInit();
     gfxInitDefault();
     uiIniciar();
 
     u32 *socBuf = memalign(SOC_ALIGN, SOC_BUFFERSIZE);
     bool rede = socBuf && R_SUCCEEDED(socInit(socBuf, SOC_BUFFERSIZE));
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+    u64 inicioApp = osGetTime();
+    bool procurouVersao = false, perguntouVersao = false;
 
     carregarIP();
     if (rede) {
@@ -193,6 +200,18 @@ int main(int argc, char **argv) {
                 if (uiDentro(&tp, tileX(i), tileY(i), TILE_W, TILE_H)) sel = abrir = i;
         }
 
+        // versão nova na internet: procura sozinho alguns segundos depois de abrir
+        // e pergunta uma vez se quer atualizar
+        if (rede && temIP && !procurouVersao && osGetTime() - inicioApp > 3000) {
+            procurouVersao = true;
+            updater_check();
+        }
+        if (!perguntouVersao && updater_state() == UPD_AVAILABLE) {
+            perguntouVersao = true;
+            atualizarPelaInternet(true);
+            if (sairDoApp) break;
+        }
+
         if (quadro % 60 == 0) temIP = rede && gethostid() != 0;
         if (rede) {
             rodarSonda(quadro);
@@ -219,6 +238,7 @@ int main(int argc, char **argv) {
         uiFim();
     }
 
+    updater_exit();
     fecharSonda();
     if (descoberta >= 0) close(descoberta);
     if (rede) {
@@ -228,7 +248,9 @@ int main(int argc, char **argv) {
         SOCU_CloseSockets();
         socExit();
     }
+    curl_global_cleanup();
     uiEncerrar();
     gfxExit();
+    romfsExit();
     return 0;
 }
