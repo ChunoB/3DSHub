@@ -303,6 +303,7 @@ int main(int argc, char **argv) {
             } else {
                 fecharSonda();
                 it->abrir();
+                if (aptShouldClose()) break;   // fechado pelo HOME dentro do módulo: sai já
                 apertouStart = false;       // o START dentro do módulo era para sair dele
                 ultimaRespostaHub = 0;
                 if (redeMudou) {            // nos Ajustes escolheu outro PC (ou casa/internet)

@@ -111,6 +111,22 @@ static void ativar(int cam) {
     if (cam == CAM_3D) CAMU_SynchronizeVsyncTiming(SELECT_OUT1, SELECT_OUT2);
 }
 
+// HOME, tampa fechada ou fechar o app: a câmera é desligada na hora (ligada durante a
+// suspensão, ela deixava o "fechando software" demorando muito) e religada na volta.
+static volatile bool camDesligada, religarCam;
+
+static void aoMudarApt(APT_HookType tipo, void *param) {
+    if (tipo == APTHOOK_ONSUSPEND || tipo == APTHOOK_ONSLEEP || tipo == APTHOOK_ONEXIT) {
+        if (!camDesligada) {
+            CAMU_StopCapture(PORT_BOTH);
+            CAMU_Activate(SELECT_NONE);
+            camDesligada = true;
+        }
+    } else if (tipo == APTHOOK_ONRESTORE || tipo == APTHOOK_ONWAKEUP) {
+        religarCam = true;
+    }
+}
+
 // A captura demora; os botões apertados nesse meio-tempo ficam guardados aqui
 // para o laço principal não perder nenhum toque.
 static u32 downGuardado;
@@ -270,6 +286,9 @@ void modCamera(void) {
     memset(&e, 0, sizeof(e));
     e.cam = TRASEIRA;
     ativar(e.cam);
+    camDesligada = religarCam = false;
+    aptHookCookie gancho;
+    aptHook(&gancho, aoMudarApt, NULL);
 
     int sock = -1;
     u64 proximaTentativa = 0, t0 = osGetTime();
@@ -285,6 +304,10 @@ void modCamera(void) {
         u32 down = agora | downGuardado;           // inclui o que foi apertado durante a captura
         downGuardado = 0;
         if ((down | hidKeysHeld()) & KEY_START) break;
+        if (religarCam) {                    // voltou do HOME ou a tampa abriu
+            religarCam = camDesligada = false;
+            ativar(e.cam);
+        }
 
         int novaCam = -1;
         bool trocarPausa = down & KEY_A, trocarLed = down & KEY_X, virar = down & KEY_B;
@@ -328,6 +351,13 @@ void modCamera(void) {
         }
         e.conectado = sock >= 0;
 
+        if (camDesligada) {                   // suspenso/fechando: não captura
+            uiQuadro();
+            desenharCima(&e, &esq, &dir);
+            desenharBaixo(&e);
+            uiFim();
+            continue;
+        }
         bool sair = false;
         bool fotoOk = capturar(e.cam, buf, &sair);
         if (sair) break;
@@ -372,9 +402,13 @@ void modCamera(void) {
         uiFim();
     }
 
+    aptUnhook(&gancho);
     gfxSet3D(false);
     if (sock >= 0) fecharRede(sock);
-    CAMU_Activate(SELECT_NONE);       // desligar a câmera já apaga o LED
+    if (!camDesligada) {
+        CAMU_StopCapture(PORT_BOTH);
+        CAMU_Activate(SELECT_NONE);   // desligar a câmera já apaga o LED
+    }
     camExit();
     if (mcuOk) mcuHwcExit();
     uiImagemLiberar(&esq);

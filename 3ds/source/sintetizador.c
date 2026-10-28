@@ -314,10 +314,27 @@ void modSintetizador(void) {
 
     HIDUSER_EnableAccelerometer();
 
+    // Com o NDSP ligado, deixar o libctru suspender o app (HOME) ou dormir (tampa) pode
+    // travar o console esperando o DSP. Então o HOME é tratado aqui: desliga o som,
+    // vai para o HOME e religa na volta. E sem dormir enquanto o sintetizador está aberto.
+    aptSetHomeAllowed(false);
+    bool podiaDormir = aptIsSleepAllowed();
+    aptSetSleepAllowed(false);
+
     bool theremin = false, inclinacao = false;
     int oitava = 4;
 
     while (aptMainLoop()) {
+        if (aptCheckHomePressRejected()) {
+            encerrarAudio(t);
+            t = NULL;
+            aptJumpToHomeMenu();
+            if (aptShouldClose()) break;          // fechou pelo HOME: sai sem religar o som
+            rodando = true;
+            P.amp = 0;
+            if (!iniciarAudio(&t)) t = NULL;
+            continue;
+        }
         hidScanInput();
         u32 down = hidKeysDown(), held = hidKeysHeld();
 
@@ -379,5 +396,7 @@ void modSintetizador(void) {
     }
 
     HIDUSER_DisableAccelerometer();
-    encerrarAudio(t);
+    if (t || audioMem) encerrarAudio(t);
+    aptSetSleepAllowed(podiaDormir);
+    aptSetHomeAllowed(true);
 }

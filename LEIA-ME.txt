@@ -66,7 +66,13 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.5.0)
+O QUE MUDOU NESTA VERSAO (1.5.1)
+- Fechar pelo HOME com a Camera aberta nao demora mais: a camera e
+  desligada ao ir para o HOME (ou fechar a tampa) e religada na volta.
+- Sintetizador: o som e desligado antes do HOME (evita travar o 3DS).
+- Fechando pelo HOME, o app nao espera mais a rede (conexoes, envio).
+
+VERSAO 1.5.0
 - Senha fixa do PC: defina no PC (icone do Hub > "Senha do acesso pela
   internet...") e pareie o 3DS de qualquer lugar digitando a senha.
 - Atualize tambem a pasta pc do PC (e rode o instalar.bat).

@@ -318,7 +318,7 @@ static bool esperarFd(curl_socket_t fd, short ev, u64 fim) {
         struct pollfd pf = { .fd = fd, .events = ev };
         int r = poll(&pf, 1, 16);
         if (r > 0) return true;
-        if (r < 0 || osGetTime() >= fim) return false;
+        if (r < 0 || osGetTime() >= fim || aptShouldClose()) return false;
         if (aoEsperarRede) aoEsperarRede();
         else if (desistirDaRede()) return false;
     }

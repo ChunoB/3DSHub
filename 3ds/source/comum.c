@@ -230,6 +230,7 @@ static bool esperar(int sock, short evento, int timeoutMs) {
         if (r > 0) return true;
         if (r < 0) return false;
         if (osGetTime() >= fim) return false;
+        if (aptShouldClose()) return false;     // fechando pelo HOME: não espera a rede
         if (aoEsperarRede) aoEsperarRede();
     }
 }
