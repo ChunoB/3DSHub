@@ -21,6 +21,9 @@ void tunelEsquecer(int i);
 // do ntfy desse código. 1 = pareou (nome do PC em 'nome'), 0 = código não achado ou vencido,
 // -1 = sem internet, -2 = 8 PCs já pareados ou erro ao gravar.
 int  tunelParearCodigo(const char *codigo, char *nome, size_t nNome);
+// Pareia com a senha fixa do PC (mesmos retornos). Leva ~1 s no Old 3DS (PBKDF2).
+int  tunelParearSenha(const char *senha, char *nome, size_t nNome);
+bool tunelCanalDaSenha(const char *senha, char *canal, size_t n);   // canal do ntfy da senha
 
 // Descobre o endereço atual do PC escolhido (lê o canal do ntfy). Bloqueia alguns segundos.
 bool tunelBuscarEndereco(void);

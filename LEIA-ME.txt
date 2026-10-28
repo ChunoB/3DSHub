@@ -31,10 +31,14 @@ O 3DS ACHA O PC SOZINHO
 USAR LONGE DE CASA (PELA INTERNET)
 - Parear (uma vez por PC; da para parear varios: casa, trabalho...):
   * Na mesma rede do PC: no 3DS va em Ajustes > Acesso pela internet.
-  * Longe do PC: no PC, icone do Hub > "Parear um 3DS longe de casa..."
-    mostra um codigo (ex.: K7QM-2XPA, vale 30 minutos). No 3DS, va em
-    Ajustes > Acesso pela internet > Digitar codigo. Tambem da para
-    pedir o codigo rodando "py parear_codigo.py" na pasta pc.
+  * Longe do PC, com a senha do PC: defina a senha uma vez no PC (icone
+    do Hub > "Senha do acesso pela internet...", da para fazer pelo
+    Parsec). No 3DS, va em Ajustes > Acesso pela internet > Digitar senha.
+    A senha nao vence. Maiusculas contam. O PC nao guarda a senha, so um
+    resumo dela. Use uma senha dificil: quem souber controla o PC.
+  * Ou com um codigo de 30 minutos: icone do Hub > "Parear um 3DS longe
+    de casa (codigo)..." (ou "py parear_codigo.py" na pasta pc) e digite
+    o codigo no mesmo lugar da senha.
 - Ajustes > Procurar o PC mostra todos: os desta rede (conexao direta)
   e os pareados ("pela internet"). Toque em um para conectar.
 - Longe de casa, o 3DS Hub percebe que o PC nao esta na rede e conecta
@@ -45,7 +49,8 @@ USAR LONGE DE CASA (PELA INTERNET)
   baixa o cloudflared (programa gratis da Cloudflare) e cria um endereco
   seguro (https), sem mexer no roteador.
 - So entra quem tem o codigo do pareamento. Para cortar o acesso de um
-  3DS perdido: icone do Hub > "Trocar o codigo do acesso pela internet".
+  3DS perdido: icone do Hub > "Trocar o codigo do acesso pela internet"
+  (e troque a senha tambem, se o 3DS perdido a conhecia).
   Para desligar tudo: icone do Hub > desmarque "Acesso pela internet".
 - O endereco atual do PC e avisado ao 3DS por um canal secreto do ntfy.sh
   (servico gratis de mensagens). Sem o codigo, o endereco nao abre nada.
@@ -61,7 +66,12 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.4.1)
+O QUE MUDOU NESTA VERSAO (1.5.0)
+- Senha fixa do PC: defina no PC (icone do Hub > "Senha do acesso pela
+  internet...") e pareie o 3DS de qualquer lugar digitando a senha.
+- Atualize tambem a pasta pc do PC (e rode o instalar.bat).
+
+VERSAO 1.4.1
 - Fechar pelo HOME nao trava mais na tela "fechando" (o encerramento da
   rede finalizava o servico duas vezes e travava no console de verdade).
 

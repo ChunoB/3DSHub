@@ -4,6 +4,8 @@
 #include "comum.h"
 
 #include <curl/curl.h>
+#include <mbedtls/md.h>
+#include <mbedtls/pkcs5.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -199,19 +201,12 @@ bool tunelBuscarEndereco(void) {
     return ok;
 }
 
-int tunelParearCodigo(const char *codigo, char *nome, size_t nNome) {
-    carregar();
-    // "k7qm-2xpa" -> "K7QM2XPA" (o canal usa minúsculas, sem traço)
-    char limpo[16];
-    size_t k = 0;
-    for (const char *p = codigo; *p && k < sizeof(limpo) - 1; p++)
-        if ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9'))
-            limpo[k++] = (*p >= 'A' && *p <= 'Z') ? *p - 'A' + 'a' : *p;
-    limpo[k] = 0;
-    if (k != 8) return 0;
-
+// Lê o pareamento publicado pelo PC num canal do ntfy ("since": "30m" para os códigos, que
+// vencem; "all" para a senha, que o PC republica sempre) e pareia. Mesmos retornos de
+// tunelParearCodigo.
+static int lerPareamento(const char *canal, const char *since, char *nome, size_t nNome) {
     char url[200];
-    snprintf(url, sizeof(url), "https://ntfy.sh/3dshub-par-%s/raw?poll=1&since=30m", limpo);
+    snprintf(url, sizeof(url), "https://ntfy.sh/%s/raw?poll=1&since=%s", canal, since);
     CURL *c = curl_easy_init();
     if (!c) return -1;
     Mem m = {0};
@@ -246,6 +241,53 @@ int tunelParearCodigo(const char *codigo, char *nome, size_t nNome) {
     if (!tunelSalvar(nm, tok, top)) return -2;
     snprintf(nome, nNome, "%s", nm);
     return 1;
+}
+
+int tunelParearCodigo(const char *codigo, char *nome, size_t nNome) {
+    carregar();
+    // "k7qm-2xpa" -> "k7qm2xpa" (o canal usa minúsculas, sem traço)
+    char limpo[16];
+    size_t k = 0;
+    for (const char *p = codigo; *p && k < sizeof(limpo) - 1; p++)
+        if ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9'))
+            limpo[k++] = (*p >= 'A' && *p <= 'Z') ? *p - 'A' + 'a' : *p;
+    limpo[k] = 0;
+    if (k != 8) return 0;
+    char canal[40];
+    snprintf(canal, sizeof(canal), "3dshub-par-%s", limpo);
+    return lerPareamento(canal, "30m", nome, nNome);
+}
+
+// Igual ao PC (remoto.py): canal = "3dshub-pw-" + 32 hex do PBKDF2-SHA256 da senha.
+#define SAL_SENHA       "3dshub-senha-v1"
+#define ITERACOES_SENHA 20000
+
+bool tunelCanalDaSenha(const char *senha, char *canal, size_t n) {
+    // sem os espaços das pontas, como o PC (senha.strip())
+    while (*senha == ' ') senha++;
+    size_t len = strlen(senha);
+    while (len && senha[len - 1] == ' ') len--;
+    if (!len) return false;
+    unsigned char chave[32];
+    mbedtls_md_context_t md;
+    mbedtls_md_init(&md);
+    bool ok = mbedtls_md_setup(&md, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 1) == 0 &&
+              mbedtls_pkcs5_pbkdf2_hmac(&md, (const unsigned char *)senha, len,
+                                        (const unsigned char *)SAL_SENHA, strlen(SAL_SENHA),
+                                        ITERACOES_SENHA, sizeof(chave), chave) == 0;
+    mbedtls_md_free(&md);
+    if (!ok) return false;
+    char hex[33];
+    for (int i = 0; i < 16; i++) snprintf(hex + i * 2, 3, "%02x", chave[i]);
+    snprintf(canal, n, "3dshub-pw-%s", hex);
+    return true;
+}
+
+int tunelParearSenha(const char *senha, char *nome, size_t nNome) {
+    carregar();
+    char canal[64];
+    if (!tunelCanalDaSenha(senha, canal, sizeof(canal))) return 0;
+    return lerPareamento(canal, "all", nome, nNome);
 }
 
 // ---------------------------------------------------------------- bytes crus no TLS

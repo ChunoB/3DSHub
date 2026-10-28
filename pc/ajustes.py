@@ -10,6 +10,8 @@ Protocolo (TCP, porta 5010; o 3DS pede e o PC responde):
                             só aceito pela rede de casa, nunca por quem já entrou pela internet)
     "P\\n"               -> "3DSP" + u32 tamanho + "XXXX-XXXX"   (código de pareamento longe de casa;
                             só aceito do próprio PC: usado pelo parear_codigo.py)
+    "S <senha em hex>\\n" -> "3DSS" + u32 (1 = senha definida e publicada, 0 = não; "S -" apaga)
+                            (senha fixa do PC; só aceito do próprio PC: usado pelo definir_senha.py)
 """
 
 import copy
@@ -169,3 +171,17 @@ class Ajustes:
                 codigo = servico.codigo_pareamento() if ip == "127.0.0.1" and servico else None
                 texto = (codigo or "").encode()
                 conn.sendall(b"3DSP" + struct.pack("<I", len(texto)) + texto)
+
+            elif cmd == "S" and len(partes) == 2:
+                # senha fixa: pedida pelo próprio PC (definir_senha.py); vem em hex por causa dos espaços
+                servico = remoto.obter()
+                ok = False
+                if ip == "127.0.0.1" and servico and partes[1] == "-":
+                    servico.apagar_senha()      # "S -": tira a senha (e troca o código)
+                    ok = True
+                elif ip == "127.0.0.1" and servico:
+                    try:
+                        ok = servico.definir_senha(bytes.fromhex(partes[1]).decode("utf-8"))
+                    except ValueError:
+                        ok = False
+                conn.sendall(b"3DSS" + struct.pack("<I", 1 if ok else 0))

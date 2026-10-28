@@ -208,7 +208,12 @@ def main():
         pystray.MenuItem("Acesso pela internet", alternar_remoto,
                          checked=lambda _: getattr(remoto, "ligado", False),
                          enabled=lambda _: "Remoto" not in erros),
-        pystray.MenuItem("Parear um 3DS longe de casa...", codigo_longe,
+        pystray.MenuItem(lambda _: "Senha do acesso pela internet..." if not getattr(remoto, "tem_senha", False)
+                         else "Trocar a senha do acesso pela internet...",
+                         lambda: subprocess.Popen([pythonw(), os.path.join(PASTA, "definir_senha.py")],
+                                                  cwd=PASTA),
+                         enabled=lambda _: "Remoto" not in erros),
+        pystray.MenuItem("Parear um 3DS longe de casa (codigo)...", codigo_longe,
                          enabled=lambda _: "Remoto" not in erros),
         pystray.MenuItem("Trocar o codigo do acesso pela internet", trocar_codigo,
                          visible=lambda _: getattr(remoto, "ligado", False)),

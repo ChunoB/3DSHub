@@ -54,6 +54,18 @@ def topico_do_codigo(codigo):
     return "3dshub-par-" + codigo.replace("-", "").lower()
 
 
+# Senha fixa do PC: o canal do ntfy vem da senha por PBKDF2 (lento de propósito, para chutes
+# custarem caro). Nem o PC guarda a senha: só o canal. O 3DS calcula o mesmo canal.
+SAL_SENHA = b"3dshub-senha-v1"
+ITERACOES_SENHA = 20000
+SENHA_MINIMA = 6
+
+
+def topico_da_senha(senha):
+    chave = hashlib.pbkdf2_hmac("sha256", senha.strip().encode("utf-8"), SAL_SENHA, ITERACOES_SENHA)
+    return "3dshub-pw-" + chave.hex()[:32]
+
+
 def obter():
     """O serviço de acesso remoto que o hub.py criou (ou None)."""
     return _instancia
@@ -110,6 +122,7 @@ class Remoto:
         self._parar = threading.Event()
         self._tunel_rodando = False
         self._publicado = 0.0
+        self._senha_publicada = 0.0
         _instancia = self
 
     # ------------------------------------------------ configuração (remoto.json)
@@ -122,6 +135,7 @@ class Remoto:
         d.setdefault("ligado", False)
         d.setdefault("token", "")
         d.setdefault("topico", "")
+        d.setdefault("topico_senha", "")      # canal da senha fixa ("" = sem senha)
         return d
 
     def _salvar(self):
@@ -154,6 +168,44 @@ class Remoto:
         """Gera um código novo: os 3DS pareados antes deixam de entrar."""
         self.dados["token"] = ""
         self.parear()
+        if self.dados["topico_senha"]:
+            self._publicar_senha()     # a senha continua valendo, já com o código novo
+
+    @property
+    def tem_senha(self):
+        return bool(self.dados["topico_senha"])
+
+    def definir_senha(self, senha):
+        """Liga o acesso e guarda o canal da senha. Volta True se publicou no ntfy."""
+        if len(senha.strip()) < SENHA_MINIMA:
+            return False
+        self.parear()
+        self.dados["topico_senha"] = topico_da_senha(senha)
+        self._salvar()
+        print("Remoto: senha do acesso pela internet definida")
+        return self._publicar_senha()
+
+    def apagar_senha(self):
+        """Tira a senha e troca o código: o pareamento antigo que ficou no ntfy (até 12 h)
+        deixa de servir para entrar."""
+        self.dados["topico_senha"] = ""
+        self.trocar_codigo()
+        print("Remoto: senha apagada e codigo trocado")
+
+    def _publicar_senha(self):
+        """Põe os dados do pareamento no canal da senha (o ntfy guarda 12 h: republica sempre)."""
+        nome = socket.gethostname()[:30].replace(" ", "")
+        try:
+            req = urllib.request.Request(NTFY + self.dados["topico_senha"],
+                                         data=f"3DSPAR1 {self.dados['token']} {self.dados['topico']} {nome}".encode(),
+                                         headers={"User-Agent": "3DSHub", "Cache": "yes"}, method="POST")
+            urllib.request.urlopen(req, timeout=20).read()
+            self._senha_publicada = time.monotonic()
+            return True
+        except Exception as e:
+            print("Remoto: nao consegui publicar o pareamento da senha:", e)
+            self._senha_publicada = 0.0
+            return False
 
     def codigo_pareamento(self):
         """Pareamento longe de casa: liga o acesso, cria um código curto (ex.: K7QM-2XPA) e põe
@@ -186,6 +238,10 @@ class Remoto:
         (e tenta de novo logo se a última vez falhou)."""
         while True:
             time.sleep(60)
+            if self.ligado and self.dados["topico_senha"]:
+                espera = REPUBLICAR_S if self._senha_publicada else 120
+                if time.monotonic() - self._senha_publicada > espera:
+                    self._publicar_senha()
             url = self.status["url"]
             if not url or not self.ligado:
                 continue
