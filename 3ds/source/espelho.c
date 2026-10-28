@@ -332,7 +332,7 @@ void modEspelho(void) {
     int sock = conectarTCP(PORTA, 8000);
     if (sock == CONEXAO_CANCELADA) return;
     if (sock < 0 || !pedirLista(sock)) {
-        if (sock >= 0) close(sock);
+        if (sock >= 0) fecharRede(sock);
         uiAviso("Não conectou",
                 "Não consegui falar com o PC.\n\n"
                 "O 3DS Hub está rodando no PC (ícone perto do\n"
@@ -345,7 +345,7 @@ void modEspelho(void) {
     static UiImagem im;
     if (!jpeg || !uiImagemCriar(&im, 400, 240)) {
         free(jpeg);
-        close(sock);
+        fecharRede(sock);
         uiAviso("Espelho", "Sem memória para a imagem.", IC_X, COR_AZUL);
         return;
     }
@@ -502,7 +502,7 @@ void modEspelho(void) {
 
     aoEsperarRede = NULL;
     free(jpeg);
-    close(sock);
+    fecharRede(sock);
     uiImagemLiberar(&im);
 
     if (caiu && !saiu && aptMainLoop())

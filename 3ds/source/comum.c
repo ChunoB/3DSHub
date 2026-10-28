@@ -1,4 +1,5 @@
 #include "comum.h"
+#include "tunel.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -19,6 +20,7 @@ struct in_addr enderecoPC;
 char nomePC[32];
 char caminhoApp[256] = "sdmc:/3ds/3dshub.3dsx";
 bool sairDoApp;
+bool modoRemoto;
 void (*aoEsperarRede)(void);
 
 // ---------------------------------------------------------------- IP
@@ -138,13 +140,14 @@ u32 crc32(u32 crc, const void *dados, size_t n) {
 // ---------------------------------------------------------------- rede
 
 int abrirUDP(int porta, struct sockaddr_in *destino) {
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sock < 0) return -1;
-
     memset(destino, 0, sizeof(*destino));
     destino->sin_family = AF_INET;
     destino->sin_port   = htons(porta);
     destino->sin_addr   = enderecoPC;
+    if (modoRemoto) return tunelAbrir(porta, true, 12000);
+
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) return -1;
 
     // escuta na mesma porta para receber as respostas do PC
     struct sockaddr_in local;
@@ -158,6 +161,8 @@ int abrirUDP(int porta, struct sockaddr_in *destino) {
 }
 
 int conectarTCP(int porta, int timeoutMs) {
+    // pela internet o TLS demora mais para abrir (sobretudo no Old 3DS)
+    if (modoRemoto) return tunelAbrir(porta, false, timeoutMs < 12000 ? 12000 : timeoutMs);
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) return -1;
     struct sockaddr_in destino;
@@ -222,6 +227,7 @@ static bool esperar(int sock, short evento, int timeoutMs) {
 
 // O timeout vale para cada espera: se nada andar nesse tempo, desiste.
 bool enviarTudo(int sock, const void *dados, size_t n, int timeoutMs) {
+    if (ehTunel(sock)) return tunelEnviar(sock, dados, n, timeoutMs);
     const u8 *p = dados;
     while (n > 0) {
         if (!esperar(sock, POLLOUT, timeoutMs)) return false;
@@ -235,6 +241,7 @@ bool enviarTudo(int sock, const void *dados, size_t n, int timeoutMs) {
 }
 
 bool receberTudo(int sock, void *dados, size_t n, int timeoutMs) {
+    if (ehTunel(sock)) return tunelReceberTudo(sock, dados, n, timeoutMs);
     u8 *p = dados;
     while (n > 0) {
         if (!esperar(sock, POLLIN, timeoutMs)) return false;
@@ -245,6 +252,21 @@ bool receberTudo(int sock, void *dados, size_t n, int timeoutMs) {
         n -= r;
     }
     return true;
+}
+
+int enviarPara(int sock, const void *dados, size_t n, const struct sockaddr_in *destino) {
+    if (ehTunel(sock)) return tunelEnviar(sock, dados, n, 1000) ? (int)n : -1;
+    return sendto(sock, dados, n, 0, (const struct sockaddr *)destino, sizeof(*destino));
+}
+
+int receberDe(int sock, void *buf, size_t n) {
+    if (ehTunel(sock)) return tunelReceberDatagrama(sock, buf, n);
+    return recvfrom(sock, buf, n, 0, NULL, NULL);
+}
+
+void fecharRede(int sock) {
+    if (ehTunel(sock)) tunelFechar(sock);
+    else if (sock >= 0) close(sock);
 }
 
 // ---------------------------------------------------------------- JPEG

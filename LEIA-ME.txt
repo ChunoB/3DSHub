@@ -23,6 +23,24 @@ O 3DS ACHA O PC SOZINHO
   procura o PC sozinho. Em Ajustes da para procurar de novo ou
   digitar o IP na mao (ele aparece no menu do icone do Hub).
 
+USAR LONGE DE CASA (PELA INTERNET)
+- Em casa, com o PC e o 3DS na mesma rede: no 3DS va em Ajustes >
+  Acesso pela internet. Pronto, o 3DS fica pareado com este PC.
+- Longe de casa, o 3DS Hub percebe que o PC nao esta na rede e conecta
+  pela internet sozinho (o menu mostra "Conectado pela internet").
+  Voltando para casa, ele volta para a conexao direta, que e mais rapida.
+- O PC precisa estar ligado com o 3DS Hub aberto. Na primeira vez o Hub
+  baixa o cloudflared (programa gratis da Cloudflare) e cria um endereco
+  seguro (https), sem mexer no roteador.
+- So entra quem tem o codigo do pareamento. Para cortar o acesso de um
+  3DS perdido: icone do Hub > "Trocar o codigo do acesso pela internet".
+  Para desligar tudo: icone do Hub > desmarque "Acesso pela internet".
+- O endereco atual do PC e avisado ao 3DS por um canal secreto do ntfy.sh
+  (servico gratis de mensagens). Sem o codigo, o endereco nao abre nada.
+- Pela internet: Segunda Tela e Espelho funcionam bem; o Controle sente o
+  atraso da internet. Redes com pagina de login (eduroam, Wi-Fi da
+  faculdade) nao funcionam no 3DS: use o hotspot do celular.
+
 ATUALIZAR SEM TIRAR O CARTAO
 - Pela internet: ao abrir, o 3DS Hub procura versao nova no GitHub
   sozinho e pergunta "Atualizar agora?". Na mao: Ajustes > Atualizar
@@ -31,7 +49,12 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.1.0)
+O QUE MUDOU NESTA VERSAO (1.2.0)
+- Acesso pela internet: use o 3DS Hub longe de casa. Troca sozinho entre
+  a conexao direta (em casa) e a internet (fora), com codigo de pareamento.
+  Atualize tambem a pasta pc do PC (precisa do Hub do PC 1.2).
+
+VERSAO 1.1.0
 - Atualizacao pela internet (GitHub), sozinha ao abrir ou em Ajustes.
 
 VERSAO 1.0.0

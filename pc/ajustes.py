@@ -6,6 +6,8 @@ Protocolo (TCP, porta 5010; o 3DS pede e o PC responde):
     "B <tipo>\\n"        -> "3DSB" + u32 tamanho + o arquivo
     "C\\n"               -> "3DSC" + u32 tamanho + "chave=valor\\n" das configurações do controle
     "W <chave> <valor>\\n" -> "3DSW" + u32 (1 = gravou, 0 = recusou)
+    "R\\n"               -> "3DSR" + u32 tamanho + "token\\ntopico\\n"   (liga o acesso pela internet;
+                            só aceito pela rede de casa, nunca por quem já entrou pela internet)
 """
 
 import copy
@@ -16,6 +18,7 @@ import threading
 import time
 import zlib
 
+import remoto
 from config import PASTA
 
 PORTA = 5010
@@ -85,7 +88,7 @@ class Ajustes:
             print(f"Ajustes: 3DS conectado ({origem[0]})")
             self.status["conectado"] = True
             try:
-                self._atender(conn)
+                self._atender(conn, origem[0])
             except Exception as e:
                 print("Ajustes: desconectou", repr(e))
             finally:
@@ -109,7 +112,7 @@ class Ajustes:
         print(f"Ajustes: {chave} = {formatar(valor)}")
         return True
 
-    def _atender(self, conn):
+    def _atender(self, conn, ip):
         conn.settimeout(60)
         arquivo = conn.makefile("rb")
         while True:
@@ -143,3 +146,14 @@ class Ajustes:
             elif cmd == "W" and len(partes) == 3:
                 ok = self._gravar(partes[1], partes[2])
                 conn.sendall(b"3DSW" + struct.pack("<I", 1 if ok else 0))
+
+            elif cmd == "R":
+                # parear só pela rede de casa: quem chega pelo portão da internet vem de 127.0.0.1
+                servico = remoto.obter()
+                if ip.startswith("127.") or not servico:
+                    conn.sendall(b"3DSR" + struct.pack("<I", 0))
+                    continue
+                token, topico = servico.parear()
+                texto = f"{token}\n{topico}\n".encode()
+                print("Ajustes: 3DS pareado para acesso pela internet")
+                conn.sendall(b"3DSR" + struct.pack("<I", len(texto)) + texto)

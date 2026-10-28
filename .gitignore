@@ -7,3 +7,7 @@ build/
 __pycache__/
 ferramentas/
 dist/
+
+cloudflared.exe
+cloudflared.exe.baixando
+remoto.json

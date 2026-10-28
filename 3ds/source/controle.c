@@ -276,13 +276,13 @@ void modControle(void) {
             p.tx = tocando ? tp.px : 0;
             p.ty = tocando ? tp.py : 0;
         }
-        sendto(sock, &p, sizeof(p), 0, (struct sockaddr *)&dest, sizeof(dest));
+        enviarPara(sock, &p, sizeof(p), &dest);
 
         // resposta do PC: "3DSA" + perfil + "\n" + modo
         // respostas do PC: "3DSA" (perfil e modo) e "3DSM" (o que cada botão faz)
         static char resp[1024];
         int n;
-        while ((n = recvfrom(sock, resp, sizeof(resp) - 1, 0, NULL, NULL)) >= 4) {
+        while ((n = receberDe(sock, resp, sizeof(resp) - 1)) >= 4) {
             resp[n] = 0;
             if (!memcmp(resp, "3DSM", 4)) {
                 lerLegenda(resp + 4);
@@ -315,9 +315,9 @@ void modControle(void) {
     memcpy(p.magic, "3DS2", 4);
     for (int i = 0; i < 5; i++) {
         p.seq = seq++;
-        sendto(sock, &p, sizeof(p), 0, (struct sockaddr *)&dest, sizeof(dest));
+        enviarPara(sock, &p, sizeof(p), &dest);
     }
-    close(sock);
+    fecharRede(sock);
     HIDUSER_DisableGyroscope();
     irrstExit();
 }

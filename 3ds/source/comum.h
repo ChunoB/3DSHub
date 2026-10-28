@@ -33,13 +33,18 @@ extern void (*aoEsperarRede)(void);
 
 u32 crc32(u32 crc, const void *dados, size_t n);  // igual ao zlib.crc32 (comece com 0)
 
-// Rede
+// Rede. Com modoRemoto ligado (o PC não está na mesma rede), as mesmas funções usam o
+// túnel pela internet (tunel.c): os módulos não precisam saber a diferença.
+extern bool modoRemoto;
 int  abrirUDP(int porta, struct sockaddr_in *destino);    // não bloqueia
 // Conecta sem travar: B ou START cancela. Retorna o socket, -1 se falhar ou -2 se cancelado.
 int  conectarTCP(int porta, int timeoutMs);
 #define CONEXAO_CANCELADA -2
 bool enviarTudo(int sock, const void *dados, size_t n, int timeoutMs);
 bool receberTudo(int sock, void *dados, size_t n, int timeoutMs);
+int  enviarPara(int sock, const void *dados, size_t n, const struct sockaddr_in *destino);   // UDP
+int  receberDe(int sock, void *buf, size_t n);            // UDP sem bloquear; < 0 = nada
+void fecharRede(int sock);                                // fecha socket ou túnel
 
 // JPEG
 bool jpegCodificar(const u16 *rgb565, int w, int h, int qualidade, u8 **saida, unsigned long *tam);

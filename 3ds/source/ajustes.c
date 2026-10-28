@@ -8,6 +8,7 @@
 
 #include "comum.h"
 #include "updater.h"
+#include "tunel.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,7 +19,7 @@
 #define PORTA       5010
 #define ARQ_CRC_CIA "sdmc:/3ds/3dshub_cia.crc"   // versão do CIA instalado pela atualização
 
-enum { PROCURAR, DIGITAR_IP, ATUALIZAR, ATUALIZAR_NET, NUMERO, SIM_NAO };
+enum { PROCURAR, DIGITAR_IP, ATUALIZAR, ATUALIZAR_NET, REMOTO, NUMERO, SIM_NAO };
 
 typedef struct {
     int tipo;
@@ -31,6 +32,8 @@ static const Linha linhas[] = {
       "Pergunta para a rede quais PCs estão com o\n3DS Hub aberto e deixa você escolher um.", 0, 0, 0 },
     { DIGITAR_IP, "Digitar o IP do PC", NULL, NULL,
       "Para quando a busca não acha o PC. O IP\naparece no menu do ícone do 3DS Hub no PC.", 0, 0, 0 },
+    { REMOTO,     "Acesso pela internet", NULL, NULL,
+      "Usa o 3DS Hub longe de casa: se o PC não está\nna rede, ele conecta pela internet sozinho.\nPareie em casa, na mesma rede do PC.", 0, 0, 0 },
     { ATUALIZAR_NET, "Atualizar pela internet", NULL, NULL,
       "Baixa do GitHub a versão mais nova do 3DS Hub\n(precisa de internet no Wi-Fi do 3DS).", 0, 0, 0 },
     { ATUALIZAR,  "Atualizar pelo PC", NULL, NULL,
@@ -98,7 +101,7 @@ static bool confirmar(const char *titulo, const char *texto, const char *sim, co
 // ---------------------------------------------------------------- conversa com o PC
 
 static void desconectar(void) {
-    if (sock >= 0) close(sock);
+    if (sock >= 0) fecharRede(sock);
     sock = -1;
     temValores = false;
 }
@@ -401,6 +404,50 @@ static void esperarAtualizador(const char *titulo) {
     }
 }
 
+// ---------------------------------------------------------------- acesso pela internet
+
+// Pareia em casa: o PC liga o acesso pela internet e manda o código e o canal secreto
+// (só pela rede de casa). Fica guardado no cartão SD.
+static void configurarRemoto(void) {
+    if (tunelPareado()) {
+        if (confirmar("Acesso pela internet", "Está ligado neste 3DS.\nQuer desligar (esquecer o código)?",
+                      "Desligar", "Manter"))
+            tunelEsquecer();
+        return;
+    }
+    if (modoRemoto) {
+        uiAviso("Faça em casa", "Para parear, o 3DS e o PC precisam estar\nna mesma rede.", IC_X, COR_AMARELO);
+        return;
+    }
+    if (sock < 0) conectar();
+    if (sock < 0) {
+        uiAviso("Sem conexão", "Não consegui falar com o PC nesta rede.\nConfira o PC em Ajustes.", IC_X, COR_AMARELO);
+        return;
+    }
+    desenharMensagem("Pareando...", "Pedindo o código ao PC", -1, NULL);
+    u32 tam = 0;
+    static char texto[256];
+    if (!enviarTudo(sock, "R\n", 2, 3000) || !lerResposta("3DSR", &tam)) {
+        desconectar();
+        uiAviso("PC desatualizado", "O 3DS Hub do PC precisa da versão 1.2 ou mais\nnova para o acesso pela internet.", IC_X, COR_AMARELO);
+        return;
+    }
+    if (!tam || tam >= sizeof(texto) || !receberTudo(sock, texto, tam, 5000)) {
+        uiAviso("O PC recusou", "Tente de novo com o PC e o 3DS na mesma rede.", IC_X, COR_AMARELO);
+        return;
+    }
+    texto[tam] = 0;
+    char *salvo = NULL;
+    char *tok = strtok_r(texto, "\n", &salvo);
+    char *top = strtok_r(NULL, "\n", &salvo);
+    if (!tok || !top || !tunelSalvar(tok, top)) {
+        uiAviso("Não deu certo", "Não consegui gravar no cartão SD.", IC_X, COR_VERMELHO);
+        return;
+    }
+    uiAviso("Pronto!", "Longe de casa, o 3DS Hub acha este PC pela\ninternet sozinho. O PC precisa estar ligado\ncom o 3DS Hub aberto.",
+            IC_OK, COR_VERDE_AGUA);
+}
+
 void atualizarPelaInternet(bool automatico) {
     if (!automatico) {
         updater_check();
@@ -445,6 +492,7 @@ static void textoValor(int i, char *s, size_t n) {
     else if (l->tipo == DIGITAR_IP) snprintf(s, n, "%s", ipPC[0] ? ipPC : "-");
     else if (l->tipo == ATUALIZAR)  snprintf(s, n, "%s", envIsHomebrew() ? ".3dsx" : "CIA");
     else if (l->tipo == ATUALIZAR_NET) snprintf(s, n, "v%s", updater_version());
+    else if (l->tipo == REMOTO)     snprintf(s, n, "%s", modoRemoto ? "Em uso" : tunelPareado() ? "Ligado" : "Desligado");
     else if (!temValores)           snprintf(s, n, "-");
     else if (l->tipo == SIM_NAO)    snprintf(s, n, "%s", valores[i] ? "Sim" : "Não");
     else                            snprintf(s, n, "%g %s", valores[i], l->unidade);
@@ -548,6 +596,9 @@ void modAjustes(void) {
                 break;
             case ATUALIZAR:
                 atualizar();
+                break;
+            case REMOTO:
+                configurarRemoto();
                 break;
             case ATUALIZAR_NET:
                 atualizarPelaInternet(false);

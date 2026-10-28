@@ -12,7 +12,10 @@ ESTRUTURA
   3ds\source\sintetizador.c  teclado/theremin com som (NDSP)
   3ds\source\camera.c     camera do 3DS -> PC (OBS)
   3ds\source\espelho.c    janela do PC -> tela de cima (zoom e aba Clicar)
-  3ds\source\ajustes.c    procurar PC, IP, atualizar o app, giroscopio/touchpad
+  3ds\source\ajustes.c    procurar PC, IP, atualizar o app, acesso pela internet, giroscopio/touchpad
+  3ds\source\tunel.c      acesso pela internet: HTTPS + WebSocket ate o portao do PC
+  3ds\source\updater.c    atualizacao pelo GitHub (releases)
+  3ds\romfs\cacert.pem    certificados para o HTTPS
   3ds\arte\gerar_arte.py  gera icon.png, banner.png e banner.wav
   3ds\3dshub.rsf          especificacao do CIA (servicos que o app usa)
   3ds\criar_cia.bat       gera o 3dshub.cia
@@ -24,7 +27,9 @@ ESTRUTURA
   pc\camera.py            porta 5007 (TCP) + OBS em http://127.0.0.1:8090/obs
   pc\espelho.py           porta 5008 (TCP) - imagem, zoom e cliques
   pc\descoberta.py        porta 5009 (UDP broadcast) - o 3DS acha o PC
-  pc\ajustes.py           porta 5010 (TCP) - atualizacao do app e ajustes
+  pc\ajustes.py           porta 5010 (TCP) - atualizacao do app, ajustes e pareamento
+  pc\remoto.py            porta 5011 (so no proprio PC) - portao do acesso pela internet
+                          (cloudflared + endereco publicado no ntfy.sh)
   pc\util.py              teclado/mouse, cliques, IPs do PC
 
 COMPILAR O APP DO 3DS (Windows)

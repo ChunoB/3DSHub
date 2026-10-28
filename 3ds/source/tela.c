@@ -230,7 +230,7 @@ static void enviar(int sock, struct sockaddr_in *dest, const char *magic, int cm
     char pkt[5];
     memcpy(pkt, magic, 4);
     pkt[4] = (char)cmd;
-    sendto(sock, pkt, cmd ? 5 : 4, 0, (struct sockaddr *)dest, sizeof(*dest));
+    enviarPara(sock, pkt, cmd ? 5 : 4, dest);
 }
 
 // ---------------------------------------------------------------- módulo
@@ -291,7 +291,7 @@ void modTela(void) {
         if (aceso >= 0 && --framesAceso <= 0) aceso = -1;
 
         int n;
-        while ((n = recvfrom(sock, buf, sizeof(buf) - 1, 0, NULL, NULL)) > 0) {
+        while ((n = receberDe(sock, buf, sizeof(buf) - 1)) > 0) {
             buf[n] = 0;
             if (n >= 5 && !memcmp(buf, "3DST\n", 5)) {
                 lerDados(buf + 5, &d);
@@ -307,5 +307,5 @@ void modTela(void) {
         uiFim();
         frame++;
     }
-    close(sock);
+    fecharRede(sock);
 }

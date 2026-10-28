@@ -43,6 +43,7 @@ from config import ARQUIVO as ARQ_CONFIG, Config  # noqa: E402
 from espelho import Espelho                      # noqa: E402
 from descoberta import Descoberta                # noqa: E402
 from ajustes import Ajustes                      # noqa: E402
+from remoto import Remoto                        # noqa: E402
 
 try:
     from controle import Controle                # noqa: E402
@@ -108,7 +109,7 @@ def main():
         def url_obs(self): return f"http://127.0.0.1:{config['camera']['porta_http']}/obs"
 
     classes = {"Controle": Controle, "Segunda Tela": SegundaTela, "Camera": Camera, "Espelho": Espelho,
-               "Descoberta": Descoberta, "Ajustes": Ajustes}
+               "Descoberta": Descoberta, "Ajustes": Ajustes, "Remoto": Remoto}
     servicos, erros = {}, []
     for nome, classe in classes.items():
         servicos[nome] = Falhou()
@@ -133,6 +134,23 @@ def main():
     # pelo nome (não pela ordem), para não quebrar quando entrar serviço novo
     controle, tela = servicos["Controle"], servicos["Segunda Tela"]
     camera, espelho = servicos["Camera"], servicos["Espelho"]
+    remoto = servicos["Remoto"]
+
+    def linha_remoto(_):
+        if "Remoto" in erros:
+            return "Pela internet: porta 5011 ocupada"
+        s = remoto.status
+        if not remoto.ligado:
+            return "Pela internet: desligado (pareie pelo 3DS em Ajustes)"
+        return f"Pela internet: {s.get('estado', '')}" + (" - 3DS conectado" if s.get("conectado") else "")
+
+    def alternar_remoto(_icone, _item):
+        remoto.alternar()
+
+    def trocar_codigo(icone, _item):
+        remoto.trocar_codigo()
+        icone.notify("Código novo criado. Pareie o 3DS de novo em casa (Ajustes > Acesso pela internet).",
+                     "3DS Hub")
 
     def linha_status(nome, s, extra=""):
         if nome in erros:
@@ -173,7 +191,13 @@ def main():
             "Camera", camera,
             f" ({camera.status['fps']:.1f} fps)" if camera.status.get("conectado") else ""), None, enabled=False),
         pystray.MenuItem(lambda _: linha_status("Espelho", espelho), None, enabled=False),
+        pystray.MenuItem(linha_remoto, None, enabled=False),
         pystray.Menu.SEPARATOR,
+        pystray.MenuItem("Acesso pela internet", alternar_remoto,
+                         checked=lambda _: getattr(remoto, "ligado", False),
+                         enabled=lambda _: "Remoto" not in erros),
+        pystray.MenuItem("Trocar o codigo do acesso pela internet", trocar_codigo,
+                         visible=lambda _: getattr(remoto, "ligado", False)),
         pystray.MenuItem("Copiar link da camera pro OBS", copiar_link_obs),
         pystray.MenuItem("Testar controle (joy.cpl)", lambda: subprocess.Popen(
             ["rundll32.exe", "shell32.dll,Control_RunDLL", "joy.cpl"])),

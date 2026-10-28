@@ -349,7 +349,7 @@ void modCamera(void) {
                 bool ok = enviarOlho(sock, (u16 *)buf, 0, total);
                 if (ok && total == 2) ok = enviarOlho(sock, (u16 *)(buf + TAM_IMAGEM), 1, total);
                 if (!ok) {
-                    close(sock);
+                    fecharRede(sock);
                     sock = -1;
                     e.conectado = false;
                     proximaTentativa = osGetTime() + 2000;
@@ -373,7 +373,7 @@ void modCamera(void) {
     }
 
     gfxSet3D(false);
-    if (sock >= 0) close(sock);
+    if (sock >= 0) fecharRede(sock);
     CAMU_Activate(SELECT_NONE);       // desligar a câmera já apaga o LED
     camExit();
     if (mcuOk) mcuHwcExit();

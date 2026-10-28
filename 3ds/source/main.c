@@ -6,9 +6,11 @@
 
 #include "comum.h"
 #include "updater.h"
+#include "tunel.h"
 
 #include <curl/curl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <malloc.h>
 #include <unistd.h>
@@ -62,22 +64,80 @@ static float tileY(int i) { return 8 + (i / 2) * (TILE_H + 7); }
 static int sonda = -1;
 static struct sockaddr_in destinoSonda;
 static u64 ultimaRespostaHub;
+static int descoberta = -1;
+static char aviso[64];          // "PC encontrado: ..." por alguns segundos
+static u64 avisoAte;
+static bool hubRespondendo(void);
 
 static void abrirSonda(void) {
-    if (sonda < 0 && ipPC[0]) sonda = abrirUDP(PORTA_SONDA, &destinoSonda);
+    if (sonda < 0 && (ipPC[0] || modoRemoto)) sonda = abrirUDP(PORTA_SONDA, &destinoSonda);
 }
 
-static void fecharSonda(void) {          // os módulos usam as mesmas portas
-    if (sonda >= 0) close(sonda);
+static void fecharSondaDeVez(void) {
+    if (sonda >= 0) fecharRede(sonda);
     sonda = -1;
+}
+
+// Antes de abrir um módulo: na rede de casa os módulos usam as mesmas portas, então
+// a sonda sai do caminho. Pela internet cada conexão é separada, e manter a sonda
+// evita abrir o túnel de novo (alguns segundos) toda vez que volta ao menu.
+static void fecharSonda(void) {
+    if (!modoRemoto) fecharSondaDeVez();
 }
 
 static void rodarSonda(u32 quadro) {
     if (sonda < 0) return;
-    if (quadro % 90 == 0) sendto(sonda, "3DSP", 4, 0, (struct sockaddr *)&destinoSonda, sizeof(destinoSonda));
+    if (quadro % 90 == 0 && enviarPara(sonda, "3DSP", 4, &destinoSonda) < 0 && modoRemoto) {
+        fecharSondaDeVez();          // o túnel caiu (ex.: ficou parado muito tempo): reabre depois
+        return;
+    }
     static char buf[2048];
-    while (recvfrom(sonda, buf, sizeof(buf), 0, NULL, NULL) >= 4)
+    while (receberDe(sonda, buf, sizeof(buf)) >= 4)
         if (!memcmp(buf, "3DSP", 4)) ultimaRespostaHub = osGetTime();
+}
+
+// ---------------------------------------------------------------- casa ou internet
+// Na mesma rede: conexão direta (mais rápida). Se o PC não responde na rede e o 3DS
+// foi pareado para o acesso pela internet, passa a usar o túnel sozinho. Quando o PC
+// aparece de novo na rede, volta para a conexão direta.
+
+static u64 inicioApp, proximaTentativaRemota;
+
+static void mensagemRapida(const char *titulo, const char *texto) {
+    uiQuadro();
+    uiTela(alvoCima);
+    uiBarraStatus("3DS Hub", IC_CONTROLE, COR_TEXTO);
+    uiTexto(200, 90, 18, COR_TEXTO, CENTRO, 360, "%s", titulo);
+    uiTexto(200, 122, 13, COR_TEXTO2, CENTRO, 360, "%s", texto);
+    uiTela(alvoBaixo);
+    uiFim();
+}
+
+static void rodarRemoto(bool temIP) {
+    if (!temIP || !tunelPareado()) return;
+    u64 agora = osGetTime();
+    if (!modoRemoto) {
+        // espera a rede de casa ter uma chance antes de ir pela internet
+        if (agora - inicioApp < 6000 || hubRespondendo() || agora < proximaTentativaRemota) return;
+        proximaTentativaRemota = agora + 60000;
+        mensagemRapida("Procurando o PC pela internet...", "O PC não respondeu nesta rede.");
+        if (!tunelBuscarEndereco()) return;
+        fecharSondaDeVez();
+        modoRemoto = true;
+        ultimaRespostaHub = 0;
+        abrirSonda();
+        if (sonda < 0) {             // não deu: continua na rede de casa
+            modoRemoto = false;
+            abrirSonda();
+            return;
+        }
+        snprintf(aviso, sizeof(aviso), "Conectado ao PC pela internet");
+        avisoAte = osGetTime() + 4000;
+    } else if (sonda < 0 && agora >= proximaTentativaRemota) {
+        proximaTentativaRemota = agora + 10000;
+        mensagemRapida("Reconectando pela internet...", "");
+        abrirSonda();
+    }
 }
 
 static bool hubRespondendo(void) {
@@ -86,9 +146,6 @@ static bool hubRespondendo(void) {
 
 // ---------------------------------------------------------------- descoberta
 
-static int descoberta = -1;
-static char aviso[64];          // "PC encontrado: ..." por alguns segundos
-static u64 avisoAte;
 
 // Pergunta de vez em quando quem é o 3DS Hub da rede. Só troca de PC sozinho
 // quando o PC atual não responde (ou ainda não tem IP): assim, com dois PCs
@@ -96,11 +153,21 @@ static u64 avisoAte;
 static void rodarDescoberta(u32 quadro) {
     if (descoberta < 0) return;
     bool hubOk = hubRespondendo();
-    if (quadro % 120 == 30 && (!hubOk || !ipPC[0] || !nomePC[0])) descobertaPerguntar(descoberta);
+    if (quadro % 120 == 30 && (!hubOk || modoRemoto || !ipPC[0] || !nomePC[0])) descobertaPerguntar(descoberta);
 
     char ip[32], nome[32];
     while (descobertaResposta(descoberta, ip, sizeof(ip), nome, sizeof(nome))) {
-        if (!strcmp(ip, ipPC)) {
+        if (modoRemoto) {
+            // o PC apareceu na rede de casa: volta para a conexão direta
+            fecharSondaDeVez();
+            modoRemoto = false;
+            definirIP(ip);
+            snprintf(nomePC, sizeof(nomePC), "%s", nome);
+            ultimaRespostaHub = 0;
+            abrirSonda();
+            snprintf(aviso, sizeof(aviso), "PC na mesma rede: conexão direta");
+            avisoAte = osGetTime() + 4000;
+        } else if (!strcmp(ip, ipPC)) {
             snprintf(nomePC, sizeof(nomePC), "%s", nome);   // o mesmo PC: só aprende o nome
         } else if (!ipPC[0] || !hubOk) {
             fecharSonda();
@@ -137,12 +204,14 @@ static void desenharMenu(int sel, bool temIP) {
     // rodapé: qual PC e se o Hub respondeu
     uiRet(16, 202, 368, 1, COR_LINHA);
     uiIcone(IC_PC, 26, 220, 14, COR_MUDO, COR_FUNDO);
-    if (!ipPC[0])       uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "PC: procurando...");
+    if (modoRemoto)     uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "%s (pela internet)", nomePC[0] ? nomePC : "PC");
+    else if (!ipPC[0])  uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "PC: procurando...");
     else if (nomePC[0]) uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "%s (%s)", nomePC, ipPC);
     else                uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "PC %s", ipPC);
     bool hubOk = hubRespondendo();
     u32 cor = !temIP ? COR_VERMELHO : hubOk ? COR_AGUA_CL : COR_AMARELO;
-    const char *estado = !temIP ? "3DS sem Wi-Fi" : hubOk ? "Hub encontrado" : "Procurando o Hub...";
+    const char *estado = !temIP ? "3DS sem Wi-Fi" : hubOk ? (modoRemoto ? "Conectado pela internet" : "Hub encontrado")
+                                                          : (modoRemoto ? "Conectando pela internet..." : "Procurando o Hub...");
     float w = uiTexto(384, 212, 13, cor, DIR, 0, "%s", estado);
     uiIcone(hubOk && temIP ? IC_OK : IC_X, 384 - w - 10, 220, 12, cor, COR_FUNDO);
 
@@ -168,8 +237,9 @@ int main(int argc, char **argv) {
     u32 *socBuf = memalign(SOC_ALIGN, SOC_BUFFERSIZE);
     bool rede = socBuf && R_SUCCEEDED(socInit(socBuf, SOC_BUFFERSIZE));
     curl_global_init(CURL_GLOBAL_DEFAULT);
-    u64 inicioApp = osGetTime();
     bool procurouVersao = false, perguntouVersao = false;
+    inicioApp = osGetTime();
+    srand((unsigned)svcGetSystemTick());
 
     carregarIP();
     if (rede) {
@@ -216,6 +286,7 @@ int main(int argc, char **argv) {
         if (rede) {
             rodarSonda(quadro);
             rodarDescoberta(quadro);
+            rodarRemoto(temIP);
         }
         quadro++;
 
@@ -223,7 +294,7 @@ int main(int argc, char **argv) {
             const Item *it = &itens[abrir];
             if (it->precisaPC && !rede) {
                 uiAviso("Rede do 3DS", "Não consegui iniciar a rede do 3DS.\nReinicie o app.", IC_X, COR_VERMELHO);
-            } else if (it->precisaPC && !ipPC[0] && !pedirIP()) {
+            } else if (it->precisaPC && !modoRemoto && !ipPC[0] && !pedirIP()) {
                 // ainda sem PC e cancelou o IP: continua no menu (a descoberta segue tentando)
             } else {
                 fecharSonda();
