@@ -8,6 +8,8 @@ Protocolo (TCP, porta 5010; o 3DS pede e o PC responde):
     "W <chave> <valor>\\n" -> "3DSW" + u32 (1 = gravou, 0 = recusou)
     "R\\n"               -> "3DSR" + u32 tamanho + "token\\ntopico\\nnome\\n"   (liga o acesso pela internet;
                             só aceito pela rede de casa, nunca por quem já entrou pela internet)
+    "P\\n"               -> "3DSP" + u32 tamanho + "XXXX-XXXX"   (código de pareamento longe de casa;
+                            só aceito do próprio PC: usado pelo parear_codigo.py)
 """
 
 import copy
@@ -160,3 +162,10 @@ class Ajustes:
                 texto = f"{token}\n{topico}\n{nome}\n".encode()
                 print("Ajustes: 3DS pareado para acesso pela internet")
                 conn.sendall(b"3DSR" + struct.pack("<I", len(texto)) + texto)
+
+            elif cmd == "P":
+                # código de pareamento: pedido pelo próprio PC (parear_codigo.py)
+                servico = remoto.obter()
+                codigo = servico.codigo_pareamento() if ip == "127.0.0.1" and servico else None
+                texto = (codigo or "").encode()
+                conn.sendall(b"3DSP" + struct.pack("<I", len(texto)) + texto)

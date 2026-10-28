@@ -33,7 +33,7 @@ static const Linha linhas[] = {
     { DIGITAR_IP, "Digitar o IP do PC", NULL, NULL,
       "Para quando a busca não acha o PC. O IP\naparece no menu do ícone do 3DS Hub no PC.", 0, 0, 0 },
     { REMOTO,     "Acesso pela internet", NULL, NULL,
-      "Pareia o PC conectado agora (mesma rede) para\nele aparecer em \"Procurar o PC\" e conectar\nsozinho longe de casa. Vale para vários PCs.", 0, 0, 0 },
+      "Pareia um PC para usar longe de casa: na mesma\nrede é automático; longe dela, digite o código\nque o PC mostra. Vale para vários PCs.", 0, 0, 0 },
     { ATUALIZAR_NET, "Atualizar pela internet", NULL, NULL,
       "Baixa do GitHub a versão mais nova do 3DS Hub\n(precisa de internet no Wi-Fi do 3DS).", 0, 0, 0 },
     { ATUALIZAR,  "Atualizar pelo PC", NULL, NULL,
@@ -439,6 +439,32 @@ static void esperarAtualizador(const char *titulo) {
 
 // ---------------------------------------------------------------- acesso pela internet
 
+// Pareia longe de casa: o usuário digita o código que o PC mostra (vale 30 minutos) e o
+// 3DS já passa a usar esse PC pela internet.
+static void parearComCodigo(void) {
+    SwkbdState kb;
+    char codigo[16] = "";
+    swkbdInit(&kb, SWKBD_TYPE_QWERTY, 2, 9);
+    swkbdSetHintText(&kb, "Código do PC (ex: K7QM-2XPA)");
+    swkbdSetValidation(&kb, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+    if (swkbdInputText(&kb, codigo, sizeof(codigo)) != SWKBD_BUTTON_CONFIRM) return;
+
+    desenharMensagem("Pareando...", "Buscando o código na internet", -1, NULL);
+    char nome[32];
+    int r = tunelParearCodigo(codigo, nome, sizeof(nome));
+    if (r == -1) { uiAviso("Sem internet", "Não consegui buscar o código.\nConfira o Wi-Fi do 3DS e tente de novo.", IC_X, COR_AMARELO); return; }
+    if (r == -2) { uiAviso("Muitos PCs", "Este 3DS já tem 8 PCs pareados.\nEsqueça um antes de parear outro.", IC_X, COR_AMARELO); return; }
+    if (r == 0)  { uiAviso("Código não achado", "Confira as letras ou peça um código novo no PC\n(cada código vale por 30 minutos).", IC_X, COR_AMARELO); return; }
+
+    // já passa a usar este PC pela internet
+    snprintf(nomePC, sizeof(nomePC), "%s", nome);
+    modoRemoto = true;
+    redeMudou = true;
+    char texto[200];
+    snprintf(texto, sizeof(texto), "Pareado com \"%s\". Volte ao menu: ele conecta\npela internet. O PC precisa estar ligado\ncom o 3DS Hub aberto.", nome);
+    uiAviso("Pronto!", texto, IC_OK, COR_VERDE_AGUA);
+}
+
 // Pareia em casa: o PC liga o acesso pela internet e manda o código e o canal secreto
 // (só pela rede de casa). Fica guardado no cartão SD.
 static void configurarRemoto(void) {
@@ -446,7 +472,7 @@ static void configurarRemoto(void) {
     if (modoRemoto) {
         // longe de casa só dá para esquecer o PC em uso; parear é sempre na mesma rede
         int a = tunelAtual();
-        snprintf(texto2, sizeof(texto2), "Esquecer o PC \"%s\" neste 3DS?\nPara parear de novo, faça em casa.", tunelNomePC(a));
+        snprintf(texto2, sizeof(texto2), "Esquecer o PC \"%s\" neste 3DS?\nPara parear de novo, use o código do PC.", tunelNomePC(a));
         if (a >= 0 && confirmar("Acesso pela internet", texto2, "Esquecer", "Manter")) {
             tunelEsquecer(a);
             modoRemoto = false;
@@ -456,7 +482,11 @@ static void configurarRemoto(void) {
     }
     if (sock < 0) conectar();
     if (sock < 0) {
-        uiAviso("Sem conexão", "Para parear, o 3DS e o PC precisam estar na\nmesma rede. Escolha o PC em \"Procurar o PC\".", IC_X, COR_AMARELO);
+        // longe de casa: pareia com o código que o PC mostra
+        if (confirmar("Parear longe de casa",
+                      "O PC não está nesta rede. No PC, abra o menu do\nícone do 3DS Hub > \"Parear um 3DS longe de casa\"\ne digite aqui o código que aparecer.",
+                      "Digitar código", "Voltar"))
+            parearComCodigo();
         return;
     }
     int ja = nomePC[0] ? tunelIndice(nomePC) : -1;

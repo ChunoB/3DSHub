@@ -152,6 +152,18 @@ def main():
         icone.notify("Código novo criado. Pareie o 3DS de novo em casa (Ajustes > Acesso pela internet).",
                      "3DS Hub")
 
+    def codigo_longe(_icone, _item):
+        # numa thread: publicar no ntfy pode levar alguns segundos e a caixa espera o OK
+        def mostrar():
+            codigo = remoto.codigo_pareamento()
+            if codigo:
+                texto = (f"Código: {codigo}\n\nNo 3DS: Ajustes > Acesso pela internet > Digitar código.\n"
+                         "Vale por 30 minutos.")
+            else:
+                texto = "Não consegui criar o código (o PC está sem internet?). Veja o log."
+            ctypes.windll.user32.MessageBoxW(None, texto, "3DS Hub - parear longe de casa", 0x40)
+        threading.Thread(target=mostrar, daemon=True).start()
+
     def linha_status(nome, s, extra=""):
         if nome in erros:
             return f"{nome}: porta ocupada"
@@ -195,6 +207,8 @@ def main():
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Acesso pela internet", alternar_remoto,
                          checked=lambda _: getattr(remoto, "ligado", False),
+                         enabled=lambda _: "Remoto" not in erros),
+        pystray.MenuItem("Parear um 3DS longe de casa...", codigo_longe,
                          enabled=lambda _: "Remoto" not in erros),
         pystray.MenuItem("Trocar o codigo do acesso pela internet", trocar_codigo,
                          visible=lambda _: getattr(remoto, "ligado", False)),

@@ -17,6 +17,11 @@ void tunelEscolher(int i);
 bool tunelSalvar(const char *nome, const char *token, const char *topico);   // pareia (ou atualiza) e escolhe
 void tunelEsquecer(int i);
 
+// Pareia longe de casa com o código que o PC mostra (ex.: "K7QM-2XPA"): lê os dados no canal
+// do ntfy desse código. 1 = pareou (nome do PC em 'nome'), 0 = código não achado ou vencido,
+// -1 = sem internet, -2 = 8 PCs já pareados ou erro ao gravar.
+int  tunelParearCodigo(const char *codigo, char *nome, size_t nNome);
+
 // Descobre o endereço atual do PC escolhido (lê o canal do ntfy). Bloqueia alguns segundos.
 bool tunelBuscarEndereco(void);
 const char *tunelEndereco(void);   // "" se ainda não sabe

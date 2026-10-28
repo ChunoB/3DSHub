@@ -29,9 +29,12 @@ O 3DS ACHA O PC SOZINHO
   digitar o IP na mao (ele aparece no menu do icone do Hub).
 
 USAR LONGE DE CASA (PELA INTERNET)
-- Com o PC e o 3DS na mesma rede: no 3DS va em Ajustes > Acesso pela
-  internet. Pronto, o 3DS fica pareado com este PC. Da para parear
-  varios PCs (casa, trabalho...): faca isso uma vez perto de cada um.
+- Parear (uma vez por PC; da para parear varios: casa, trabalho...):
+  * Na mesma rede do PC: no 3DS va em Ajustes > Acesso pela internet.
+  * Longe do PC: no PC, icone do Hub > "Parear um 3DS longe de casa..."
+    mostra um codigo (ex.: K7QM-2XPA, vale 30 minutos). No 3DS, va em
+    Ajustes > Acesso pela internet > Digitar codigo. Tambem da para
+    pedir o codigo rodando "py parear_codigo.py" na pasta pc.
 - Ajustes > Procurar o PC mostra todos: os desta rede (conexao direta)
   e os pareados ("pela internet"). Toque em um para conectar.
 - Longe de casa, o 3DS Hub percebe que o PC nao esta na rede e conecta
@@ -58,7 +61,12 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.3.2)
+O QUE MUDOU NESTA VERSAO (1.4.0)
+- Parear longe de casa: o PC mostra um codigo e voce digita no 3DS
+  (Ajustes > Acesso pela internet). Nao precisa mais estar na mesma rede.
+- Atualize tambem a pasta pc do PC (e rode o instalar.bat).
+
+VERSAO 1.3.2
 - Vigia no PC: se o 3DS Hub do PC fechar, ele abre de novo sozinho em ate
   2 minutos (sem o Hub aberto o 3DS nao acha o PC). Rode o instalar.bat
   de novo para ligar o vigia.

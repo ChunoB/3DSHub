@@ -199,6 +199,55 @@ bool tunelBuscarEndereco(void) {
     return ok;
 }
 
+int tunelParearCodigo(const char *codigo, char *nome, size_t nNome) {
+    carregar();
+    // "k7qm-2xpa" -> "K7QM2XPA" (o canal usa minúsculas, sem traço)
+    char limpo[16];
+    size_t k = 0;
+    for (const char *p = codigo; *p && k < sizeof(limpo) - 1; p++)
+        if ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9'))
+            limpo[k++] = (*p >= 'A' && *p <= 'Z') ? *p - 'A' + 'a' : *p;
+    limpo[k] = 0;
+    if (k != 8) return 0;
+
+    char url[200];
+    snprintf(url, sizeof(url), "https://ntfy.sh/3dshub-par-%s/raw?poll=1&since=30m", limpo);
+    CURL *c = curl_easy_init();
+    if (!c) return -1;
+    Mem m = {0};
+    curl_easy_setopt(c, CURLOPT_URL, url);
+    curl_easy_setopt(c, CURLOPT_CAINFO, CA);
+    curl_easy_setopt(c, CURLOPT_USERAGENT, "3DSHub/" APP_VERSION);
+    curl_easy_setopt(c, CURLOPT_TIMEOUT, 15L);
+    curl_easy_setopt(c, CURLOPT_FAILONERROR, 1L);
+    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, guardar);
+    curl_easy_setopt(c, CURLOPT_WRITEDATA, &m);
+    podeCancelar(c);
+    CURLcode r = curl_easy_perform(c);
+    curl_easy_cleanup(c);
+    if (r != CURLE_OK) { free(m.buf); return -1; }
+
+    // "3DSPAR1 <token> <topico> <nome>", uma mensagem por linha: vale a última
+    char tok[100] = "", top[64] = "", nm[32] = "";
+    if (m.buf) {
+        char *salvo = NULL;
+        for (char *l = strtok_r(m.buf, "\r\n", &salvo); l; l = strtok_r(NULL, "\r\n", &salvo)) {
+            char t[100], p[64], n[32] = "";
+            if (sscanf(l, "3DSPAR1 %99s %63s %31s", t, p, n) >= 2) {
+                snprintf(tok, sizeof(tok), "%s", t);
+                snprintf(top, sizeof(top), "%s", p);
+                snprintf(nm, sizeof(nm), "%s", n[0] ? n : "PC");
+            }
+        }
+    }
+    free(m.buf);
+    if (!tok[0]) return 0;
+    if (npcs >= TUNEL_MAX_PCS && tunelIndice(nm) < 0) return -2;
+    if (!tunelSalvar(nm, tok, top)) return -2;
+    snprintf(nome, nNome, "%s", nm);
+    return 1;
+}
+
 // ---------------------------------------------------------------- bytes crus no TLS
 
 static Tunel *pegar(int h) {

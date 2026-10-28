@@ -26,6 +26,7 @@ import json
 import os
 import re
 import secrets
+import socket
 import subprocess
 import threading
 import time
@@ -42,8 +43,15 @@ PORTAS_TCP = {5007, 5008, 5010}       # Câmera, Espelho, Ajustes
 PORTAS_UDP = {5005, 5006}             # Controle, Segunda Tela
 REPUBLICAR_S = 3 * 3600               # o ntfy guarda as mensagens por 12 h
 GUID_WS = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"   # fixo, do padrão WebSocket (RFC 6455)
+ALFABETO_CODIGO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # sem 0/O e 1/I, que confundem
+                                                     # 8 letras = 40 bits: impossível de chutar em 30 min
 
 _instancia = None
+
+
+def topico_do_codigo(codigo):
+    """Canal do ntfy de um código de pareamento (o 3DS calcula o mesmo)."""
+    return "3dshub-par-" + codigo.replace("-", "").lower()
 
 
 def obter():
@@ -146,6 +154,24 @@ class Remoto:
         """Gera um código novo: os 3DS pareados antes deixam de entrar."""
         self.dados["token"] = ""
         self.parear()
+
+    def codigo_pareamento(self):
+        """Pareamento longe de casa: liga o acesso, cria um código curto (ex.: K7QM-2XPA) e põe
+        os dados do pareamento no canal do ntfy desse código. O 3DS digita o código e lê de lá
+        (só aceita mensagens dos últimos 30 minutos). Volta o código, ou None se o ntfy falhou."""
+        token, topico = self.parear()
+        codigo = "".join(secrets.choice(ALFABETO_CODIGO) for _ in range(8))
+        nome = socket.gethostname()[:30].replace(" ", "")
+        try:
+            req = urllib.request.Request(NTFY + topico_do_codigo(codigo),
+                                         data=f"3DSPAR1 {token} {topico} {nome}".encode(),
+                                         headers={"User-Agent": "3DSHub", "Cache": "yes"}, method="POST")
+            urllib.request.urlopen(req, timeout=20).read()
+        except Exception as e:
+            print("Remoto: nao consegui publicar o codigo de pareamento:", e)
+            return None
+        print("Remoto: codigo de pareamento criado (vale 30 minutos)")
+        return codigo[:4] + "-" + codigo[4:]
 
     # ------------------------------------------------ serviço
     def iniciar(self):
