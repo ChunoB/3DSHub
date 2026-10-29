@@ -37,8 +37,8 @@ APP_DESCRIPTION	:=	Controle, Segunda Tela, Sintetizador, Camera e Espelho
 APP_AUTHOR	:=	Bruno Bellini
 # version: bump it for every release (the in-app updater compares it with GitHub)
 VERSION_MAJOR	:=	1
-VERSION_MINOR	:=	6
-VERSION_MICRO	:=	2
+VERSION_MINOR	:=	7
+VERSION_MICRO	:=	0
 VERSION		:=	$(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_MICRO)
 BUILD		:=	build
 SOURCES		:=	source

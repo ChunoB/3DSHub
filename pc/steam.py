@@ -15,6 +15,9 @@ Protocolo (TCP 5012, o 3DS pede e o PC responde):
     "P appid\\n"     -> abre o jogo: "3DSO" + u32 tamanho + texto ("" = ok, senão o erro)
     "F w h\\n"       -> "3DSG" + u32 tamanho + u8 estado + JPEG w x h da janela do jogo
                         estado: 0 = esperando o jogo abrir, 1 = imagem, 2 = o jogo fechou
+    "T 400 240 k\\n" -> modo Blocos: "3DST" + u32 tamanho + u8 estado + u8 n + n números
+                        de bloco (0 a 24, linha por linha) + JPEG do mosaico com esses
+                        blocos, 5 por linha (k = 1: manda a tela inteira)
     "Q\\n"           -> fecha o jogo (como clicar no X da janela; sem resposta)
 """
 
@@ -57,6 +60,11 @@ NAO_JOGOS = re.compile(r"redistributable|steamworks|proton|steam linux runtime|s
                        r"dedicated server|soundtrack|\bsdk\b", re.I)
 PROCESSOS_STEAM = {"steam.exe", "steamwebhelper.exe", "steamservice.exe", "explorer.exe",
                    "gameoverlayui.exe", "pythonw.exe", "python.exe", "py.exe"}
+# janelas do próprio Windows que aparecem na frente sozinhas (busca, menu Iniciar...)
+PROCESSOS_SISTEMA = {"searchhost.exe", "searchapp.exe", "startmenuexperiencehost.exe",
+                     "shellexperiencehost.exe", "applicationframehost.exe", "textinputhost.exe",
+                     "systemsettings.exe", "lockapp.exe", "securityhealthsystray.exe",
+                     "widgets.exe", "phoneexperiencehost.exe"}
 
 
 # ---------------------------------------------------------------- arquivos da Steam
@@ -240,22 +248,36 @@ def janelas_visiveis():
     return saida
 
 
-def achar_janela(jogo, antes, desde):
-    """A maior janela de um programa da pasta do jogo. Se o jogo abre por um launcher
-    de fora da pasta, depois de alguns segundos vale uma janela nova em primeiro plano."""
+def janela_da_pasta(jogo):
+    """A maior janela de um programa que está dentro da pasta do jogo."""
     melhor, area_melhor = None, 0
     for hwnd, area in janelas_visiveis():
         if exe_da_janela(hwnd).startswith(jogo["pasta"] + os.sep) and area > area_melhor:
             melhor, area_melhor = hwnd, area
+    return melhor
+
+
+def achar_janela(jogo, antes, desde, aberto_em):
+    """(janela, é da pasta do jogo). Primeiro, uma janela de programa da pasta do jogo.
+    Se o jogo abre por um launcher de fora da pasta, depois de alguns segundos vale a
+    janela da frente, mas só de um programa que abriu depois do pedido (assim a busca
+    do Windows, o Steam ou o navegador não viram "o jogo")."""
+    melhor = janela_da_pasta(jogo)
     if melhor:
-        return melhor
+        return melhor, True
     if time.monotonic() - desde > 6:
         frente = win32gui.GetForegroundWindow()
         if frente and frente not in antes and win32gui.IsWindowVisible(frente):
-            exe = exe_da_janela(frente)
-            if exe and os.path.basename(exe) not in PROCESSOS_STEAM:
-                return frente
-    return None
+            try:
+                _, pid = win32process.GetWindowThreadProcessId(frente)
+                processo = psutil.Process(pid)
+                nome = processo.name().lower()
+                novo = processo.create_time() >= aberto_em - 2
+            except Exception:
+                return None, False
+            if novo and nome not in PROCESSOS_STEAM and nome not in PROCESSOS_SISTEMA:
+                return frente, False
+    return None, False
 
 
 class TelaRapida:
@@ -335,12 +357,13 @@ def escala_desenho(hwnd):
 
 class Captura:
     """Copia a janela do jogo sem parar (até QUADROS_POR_SEGUNDO) e guarda o último
-    quadro já em JPEG. Só trabalha enquanto o 3DS está pedindo quadros."""
+    quadro já encaixado no tamanho do 3DS (a compressão fica com quem pede: o JPEG
+    inteiro ou só os blocos que mudaram). Só trabalha enquanto o 3DS pede quadros."""
 
     def __init__(self, config):
         self.config = config
         self.hwnd, self.tam = None, (400, 240)
-        self.quadro = (0, None, b"")     # (número, (w, h), jpeg)
+        self.quadro = (0, None, None)    # (número, (w, h), imagem w x h)
         self.pedido_em = 0.0
         self.ativa = True
         self.cond = threading.Condition()
@@ -365,9 +388,9 @@ class Captura:
             try:
                 img = capturar_jogo(hwnd, tela, w)
                 if img is not None:
-                    jpeg = quadro_jpeg(img, w, h, self.config["steam"]["qualidade_jpeg"])
+                    tela_3ds = encaixar(img, w, h)
                     with self.cond:
-                        self.quadro = (self.quadro[0] + 1, (w, h), jpeg)
+                        self.quadro = (self.quadro[0] + 1, (w, h), tela_3ds)
                         self.cond.notify_all()
             except Exception as e:
                 print("Steam: erro ao capturar", repr(e))
@@ -376,21 +399,21 @@ class Captura:
 
     def proximo(self, hwnd, depois_de, w, h, espera=0.25):
         """Um quadro mais novo que 'depois_de' no tamanho pedido. Se a imagem não mudou
-        nesse tempo, repete o último (o 3DS continua o ciclo). (número, jpeg)."""
+        nesse tempo, repete o último (o 3DS continua o ciclo). (número, imagem ou None)."""
         self.hwnd, self.tam, self.pedido_em = hwnd, (w, h), time.monotonic()
         fim = time.monotonic() + espera
         with self.cond:
             while True:
-                n, tam, jpeg = self.quadro
+                n, tam, img = self.quadro
                 if n > depois_de and tam == (w, h):
-                    return n, jpeg
+                    return n, img
                 resto = fim - time.monotonic()
                 if resto <= 0:
-                    return (n, jpeg) if tam == (w, h) else (depois_de, b"")
+                    return (n, img) if tam == (w, h) else (depois_de, None)
                 self.cond.wait(resto)
 
 
-def quadro_jpeg(img, w, h, qualidade):
+def encaixar(img, w, h):
     """Encaixa a imagem em w x h com faixas pretas (não corta o HUD do jogo)."""
     escala = min(w / img.width, h / img.height)
     nw, nh = max(1, round(img.width * escala)), max(1, round(img.height * escala))
@@ -398,9 +421,65 @@ def quadro_jpeg(img, w, h, qualidade):
     img = img.resize((nw, nh), Image.BILINEAR, reducing_gap=2.0)
     tela = Image.new("RGB", (w, h))
     tela.paste(img, ((w - nw) // 2, (h - nh) // 2))
+    return tela
+
+
+def para_jpeg(img, qualidade):
     saida = io.BytesIO()
-    tela.save(saida, "JPEG", quality=qualidade)
+    img.save(saida, "JPEG", quality=qualidade)
     return saida.getvalue()
+
+
+def quadro_jpeg(img, w, h, qualidade):
+    return para_jpeg(encaixar(img, w, h), qualidade)
+
+
+# ---------------------------------------------------------------- modo Blocos
+# A tela do 3DS (400x240) vira 5 x 5 blocos de 80x48. Só os blocos que mudaram
+# desde o último envio vão, juntos numa imagem só ("mosaico", 5 por linha), mais a
+# lista de onde cada um fica. Os tamanhos são múltiplos de 16: os quadradinhos do
+# JPEG não misturam um bloco com o vizinho do mosaico.
+BLOCO_W, BLOCO_H = 80, 48
+BLOCOS_X, BLOCOS_Y = 400 // BLOCO_W, 240 // BLOCO_H
+N_BLOCOS = BLOCOS_X * BLOCOS_Y
+
+
+class Blocos:
+    """Lembra o que o 3DS já tem na tela e monta só a diferença."""
+
+    def __init__(self):
+        self.tem = None                  # o que o 3DS mostra (numpy 240x400x3)
+        self.proximo_refresco = 0        # um bloco por vez é reenviado mesmo sem mudar
+        self.refresco_em = 0.0
+
+    def montar(self, img, limiar, qualidade, tudo=False):
+        """(lista de blocos, JPEG do mosaico). Lista vazia = nada mudou."""
+        atual = np.asarray(img, dtype=np.int16)
+        if tudo or self.tem is None:
+            mudou = list(range(N_BLOCOS))
+        else:
+            dif = np.abs(atual - self.tem).reshape(BLOCOS_Y, BLOCO_H, BLOCOS_X, BLOCO_W, 3).mean(axis=(1, 3, 4))
+            mudou = [int(i) for i in np.flatnonzero(dif.ravel() > limiar)]
+            # de vez em quando reenvia um bloco parado: corrige o que o JPEG ou um
+            # quadro perdido tiver deixado diferente (a tela toda a cada ~5 s)
+            if time.monotonic() >= self.refresco_em:
+                self.refresco_em = time.monotonic() + 0.2
+                if self.proximo_refresco not in mudou:
+                    mudou.append(self.proximo_refresco)
+                self.proximo_refresco = (self.proximo_refresco + 1) % N_BLOCOS
+        if not mudou:
+            return [], b""
+        colunas = min(BLOCOS_X, len(mudou))
+        linhas = (len(mudou) + BLOCOS_X - 1) // BLOCOS_X
+        mosaico = Image.new("RGB", (colunas * BLOCO_W, linhas * BLOCO_H))
+        if self.tem is None:
+            self.tem = atual.copy()
+        for k, b in enumerate(mudou):
+            x, y = (b % BLOCOS_X) * BLOCO_W, (b // BLOCOS_X) * BLOCO_H
+            caixa = (x, y, x + BLOCO_W, y + BLOCO_H)
+            mosaico.paste(img.crop(caixa), ((k % BLOCOS_X) * BLOCO_W, (k // BLOCOS_X) * BLOCO_H))
+            self.tem[y:y + BLOCO_H, x:x + BLOCO_W] = atual[y:y + BLOCO_H, x:x + BLOCO_W]
+        return mudou, para_jpeg(mosaico, qualidade)
 
 
 # ---------------------------------------------------------------- servidor
@@ -446,7 +525,9 @@ class Steam:
         jogos = {}
         jogo = janela = None               # jogo aberto pelo 3DS e a janela dele
         antes, desde, achou_uma_vez, sumiu_em = set(), 0.0, False, None
+        aberto_em, da_pasta, conferiu_em = 0.0, False, 0.0
         enviado = 0                         # número do último quadro mandado
+        blocos = Blocos()
 
         def responder(magica, dados, extra=b""):
             conn.sendall(magica + struct.pack("<I", len(dados)) + extra + dados)
@@ -483,10 +564,11 @@ class Steam:
                     erro = "Jogo não encontrado no PC."
                 else:
                     antes = {h for h, _ in janelas_visiveis()}
-                    desde, janela, achou_uma_vez, sumiu_em = time.monotonic(), None, False, None
-                    enviado = 0
+                    desde, aberto_em = time.monotonic(), time.time()
+                    janela, achou_uma_vez, sumiu_em, enviado = None, False, None, 0
                     # já aberto? usa a janela que existe (não abre outro)
-                    janela = achar_janela(jogo, set(), desde)
+                    janela = janela_da_pasta(jogo)
+                    da_pasta = janela is not None
                     if janela:
                         trazer_para_frente(janela)
                         achou_uma_vez = True
@@ -499,32 +581,50 @@ class Steam:
                     print(f"Steam: abrindo {jogo['nome']} ({jogo['appid']})")
                 responder(b"3DSO", erro.encode("utf-8"))
 
-            elif cmd == "F" and len(partes) == 3:
-                estado, dados = 0, b""
+            elif (cmd == "F" and len(partes) == 3) or (cmd == "T" and len(partes) == 4):
+                estado, dados, img = 0, b"", None
                 try:
                     w, h = max(16, min(400, int(partes[1]))), max(16, min(240, int(partes[2])))
                 except ValueError:
                     w, h = 400, 240
+                if cmd == "T":                  # blocos: sempre a tela inteira do 3DS
+                    w, h = 400, 240
                 if jogo:
                     if janela and not win32gui.IsWindow(janela):
                         janela = None
+                    # janela achada pela regra reserva: quando a do jogo aparecer, troca
+                    if janela and not da_pasta and time.monotonic() - conferiu_em > 2:
+                        conferiu_em = time.monotonic()
+                        if janela_da_pasta(jogo):
+                            janela = None
                     if not janela:
-                        janela = achar_janela(jogo, antes, desde)
-                        if janela and not achou_uma_vez:
+                        janela, da_pasta = achar_janela(jogo, antes, desde, aberto_em)
+                        if janela:
                             achou_uma_vez = True
                             print(f"Steam: janela do jogo: {win32gui.GetWindowText(janela)!r}")
                             trazer_para_frente(janela)   # para o controle ir para o jogo
                     if janela:
                         sumiu_em = None
-                        enviado, dados = captura.proximo(janela, enviado, w, h)
-                        estado = 1 if dados else 0
+                        enviado, img = captura.proximo(janela, enviado, w, h)
+                        estado = 1 if img is not None else 0
                     elif achou_uma_vez:
                         # a janela sumiu: pode ser só a tela de abertura trocando pela do
                         # jogo. Só diz que fechou depois de alguns segundos sem janela.
                         sumiu_em = sumiu_em or time.monotonic()
                         if time.monotonic() - sumiu_em > 8:
                             estado = 2
-                responder(b"3DSG", dados, bytes([estado]))
+                cfg = self.config["steam"]
+                if cmd == "F":
+                    if img is not None:
+                        dados = para_jpeg(img, cfg["qualidade_jpeg"])
+                    responder(b"3DSG", dados, bytes([estado]))
+                else:
+                    # "T 400 240 k": só os blocos que mudaram (k = 1: a tela inteira)
+                    lista = []
+                    if img is not None:
+                        lista, dados = blocos.montar(img, cfg["limiar_blocos"], cfg["qualidade_jpeg"],
+                                                     tudo=partes[3] == "1")
+                    responder(b"3DST", dados, bytes([estado, len(lista)] + lista))
 
             elif cmd == "Q":
                 if janela and win32gui.IsWindow(janela):

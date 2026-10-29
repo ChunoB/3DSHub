@@ -68,10 +68,17 @@ STEAM (SEUS JOGOS DO PC NO 3DS)
   Controle, com os mesmos perfis). Na tela de baixo:
   * LT / RT: metade esquerda e direita da tela sao os gatilhos (o Old 3DS
     nao tem ZL/ZR). Ou troque para "Mouse" e use a tela como touchpad.
-  * Nitido / Rapido / Retro (toque para trocar): Nitido manda 400x240.
-    Rapido manda 200x120 ampliada e da mais quadros por segundo. Retro e a
-    mesma imagem pequena com pixels quadrados e as linhas das TVs antigas
-    (fica mais bonito que o Rapido e custa o mesmo); e o padrao no Old 3DS.
+  * Nitido / Rapido / Retro / Blocos (toque para trocar): Nitido manda
+    400x240. Rapido manda 200x120 ampliada e da mais quadros por segundo.
+    Retro e a mesma imagem pequena com pixels quadrados e as linhas das TVs
+    antigas (fica mais bonito que o Rapido e custa o mesmo); e o padrao no
+    Old 3DS. Blocos e nitido, mas o PC so manda os pedacos da tela que
+    mudaram: otimo para jogos de cartas e de turnos. Em jogos com fundo
+    animado (o redemoinho do Balatro, por exemplo) quase tudo muda e fica
+    igual ao Nitido; "limiar_blocos" no config.json ignora mudancas pequenas.
+  * Som / Mudo: o som do PC tocando no 3DS (alto-falante ou fone). Chega
+    com um pouco de atraso (uns 0,3 s) e tambem continua saindo no PC.
+    Precisa do sdmc:/3ds/dspfirm.cdc, como o Sintetizador.
   * Fechar: fecha o jogo no PC (toque duas vezes para confirmar).
   * START+SELECT (ou Voltar): volta para a biblioteca; o jogo continua
     aberto no PC.
@@ -90,7 +97,13 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.6.2)
+O QUE MUDOU NESTA VERSAO (1.7.0)
+- Steam com som: o audio do PC toca no 3DS (botao Som / Mudo).
+- Steam, modo Blocos: imagem nitida mandando so os pedacos que mudaram.
+- Atualize tambem a pasta pc do PC e rode o instalar.bat (bibliotecas novas
+  de som).
+
+VERSAO 1.6.2
 - Steam: jogos que ignoram a escala do Windows (ex.: Balatro com a tela em
   125%) apareciam pequenos, no canto da tela de cima, quando estavam atras
   de outra janela no PC. Agora ocupam a tela toda.

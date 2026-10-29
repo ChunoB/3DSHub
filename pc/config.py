@@ -159,6 +159,9 @@ PADRAO = {
     # Steam: o jogo na tela de cima do 3DS. Qualidade menor = mais quadros por segundo.
     "steam": {
         "qualidade_jpeg": 60,
+        # modo Blocos: quanto um bloco precisa mudar (diferença média, 0 a 255) para
+        # ser reenviado. Maior = ignora fundos que mexem pouco (e manda menos).
+        "limiar_blocos": 3,
     },
 }
 

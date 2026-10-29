@@ -204,6 +204,7 @@
     "qualidade_jpeg": 70
   },
   "steam": {
-    "qualidade_jpeg": 60
+    "qualidade_jpeg": 60,
+    "limiar_blocos": 3
   }
 }

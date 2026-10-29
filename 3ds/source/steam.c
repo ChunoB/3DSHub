@@ -11,6 +11,7 @@
 //   START + SELECT                     : voltar para a biblioteca (o jogo continua no PC)
 
 #include "comum.h"
+#include "som.h"
 
 #include <stdarg.h>
 #include <stdio.h>
@@ -45,11 +46,20 @@ static int capaDe = -1;                 // de qual jogo é a capa grande carrega
 static u8 *jpeg;                        // MAX_JPEG + 1 (o +1 é o 0 do fim dos textos)
 // Imagem do jogo (botão na tela de baixo, passa de um para o outro):
 //   Nítido = 400x240; Rápido = 200x120 ampliada e suavizada (mais quadros por segundo);
-//   Retro  = 200x120 com pixels quadrados e linhas de TV antiga (custa o mesmo que o Rápido)
-enum { IMG_NITIDO, IMG_RAPIDO, IMG_RETRO, N_MODOS_IMG };
-static const char *nomeModoImg[N_MODOS_IMG] = { "Nítido", "Rápido", "Retro" };
+//   Retro  = 200x120 com pixels quadrados e linhas de TV antiga (custa o mesmo que o Rápido);
+//   Blocos = 400x240, mas o PC só manda os pedaços (80x48) que mudaram: em jogos de
+//            cartas e turnos quase nada muda, e fica fluido mesmo nítido
+enum { IMG_NITIDO, IMG_RAPIDO, IMG_RETRO, IMG_BLOCOS, N_MODOS_IMG };
+static const char *nomeModoImg[N_MODOS_IMG] = { "Nítido", "Rápido", "Retro", "Blocos" };
 static int modoImg = -1;                // -1 = ainda não escolheu (depende de Old/New 3DS)
-static int larguraPedida(void) { return modoImg == IMG_NITIDO ? 400 : 200; }
+static int larguraPedida(void) { return modoImg == IMG_RAPIDO || modoImg == IMG_RETRO ? 200 : 400; }
+
+#define BLOCO_W  80                     // iguais aos do pc/steam.py
+#define BLOCO_H  48
+#define BLOCOS_X 5
+#define N_BLOCOS 25
+static u16 *mosaico;                    // os blocos que chegaram, 5 por linha (400x240)
+static bool somQuerido = true;          // botão Som (fica escolhido entre um jogo e outro)
 
 // ---------------------------------------------------------------- rede
 
@@ -209,7 +219,8 @@ static void desenharConectando(void) {
 
 #define BOT_Y   6
 #define BOT_H   34
-#define BOT_W   74
+#define BOT_W   58
+#define N_BOT   5                       // Voltar, imagem, toque, som, fechar
 #define AREA_Y0 46                      // tela de toque: LT/RT ou touchpad
 #define AREA_Y1 200
 static float botX(int b) { return 6 + b * (BOT_W + 4); }
@@ -276,9 +287,12 @@ static void amostrarEntrada(void) {
     ctl.down |= down;
     if ((held & KEY_START) && (held & KEY_SELECT)) ctl.sair = true;
     enviarControle();
+    somAtualizar();
 }
 
 // ---------------------------------------------------------------- jogando: desenho
+
+static float blocosMedia;               // blocos por quadro no último segundo (modo Blocos)
 
 static void desenharJogo(int i, bool temImagem, bool imagemRapida, float fps, u64 abrindoMs, bool confirmar) {
     uiTela(alvoCima);
@@ -302,10 +316,12 @@ static void desenharJogo(int i, bool temImagem, bool imagemRapida, float fps, u6
     }
 
     uiTela(alvoBaixo);
-    const char *rotulos[4] = { "Voltar", nomeModoImg[modoImg], ctl.toqueMouse ? "Mouse" : "LT / RT",
-                               confirmar ? "Certeza?" : "Fechar" };
-    for (int b = 0; b < 4; b++) {
-        u32 fundo = b == 3 && confirmar ? COR_VERMELHO : b == 1 || b == 2 ? COR_CARTAO2 : COR_CARTAO;
+    const char *rotulos[N_BOT] = { "Voltar", nomeModoImg[modoImg], ctl.toqueMouse ? "Mouse" : "LT/RT",
+                                   somLigado() ? "Som" : "Mudo", confirmar ? "Fechar?" : "Fechar" };
+    for (int b = 0; b < N_BOT; b++) {
+        u32 fundo = b == 4 && confirmar ? COR_VERMELHO
+                  : b == 3 && somLigado() ? COR_STEAM
+                  : b == 1 || b == 2 || b == 3 ? COR_CARTAO2 : COR_CARTAO;
         uiBotao(botX(b), BOT_Y, BOT_W, BOT_H, rotulos[b], -1, fundo, COR_TEXTO);
     }
 
@@ -330,9 +346,62 @@ static void desenharJogo(int i, bool temImagem, bool imagemRapida, float fps, u6
         uiTexto(238, 142, 11, rt ? COR_BRANCO : COR_MUDO, CENTRO, 0, "gatilho direito");
     }
 
-    float wf = temImagem ? uiTexto(314, 206, 11, COR_STEAM_CL, DIR, 0, "%.1f fps", fps) : 0;
+    float wf = !temImagem ? 0
+             : modoImg == IMG_BLOCOS ? uiTexto(314, 206, 11, COR_STEAM_CL, DIR, 0, "%.1f fps  %.0f/25 blocos", fps, blocosMedia)
+             : uiTexto(314, 206, 11, COR_STEAM_CL, DIR, 0, "%.1f fps", fps);
     uiTexto(6, 206, 11, COR_TEXTO2, ESQ, 300 - wf, "%s", jogos[i].nome);
     uiTexto(6, 222, 10, COR_MUDO, ESQ, 0, "START+SELECT: biblioteca (o jogo continua no PC)");
+}
+
+// ---------------------------------------------------------------- jogando: quadros
+
+// Um pedido de quadro no modo atual. Diz se foi de blocos e de que largura.
+// tudo = (Blocos) a tela inteira, para começar ou se um mosaico se perdeu.
+static bool pedirQuadro(int sock, bool *blocos, int *w, bool tudo) {
+    *blocos = modoImg == IMG_BLOCOS;
+    *w = larguraPedida();
+    if (*blocos) return enviarTexto(sock, "T 400 240 %d\n", tudo ? 1 : 0);
+    return enviarTexto(sock, "F %d %d\n", *w, *w * 3 / 5);
+}
+
+// "3DSG" + u32 tamanho + u8 estado + JPEG, ou (blocos)
+// "3DST" + u32 tamanho + u8 estado + u8 n + n blocos + JPEG do mosaico
+static bool receberQuadro(int sock, bool blocos, u8 *estado, u8 *lista, int *n, u32 *tam) {
+    *n = 0;
+    if (!blocos) return receberResposta(sock, "3DSG", estado, 1, tam);
+    char cab[8];
+    u8 extra[2];
+    if (!receberTudo(sock, cab, 8, 8000) || memcmp(cab, "3DST", 4)) return false;
+    memcpy(tam, cab + 4, 4);
+    if (!receberTudo(sock, extra, 2, 8000)) return false;
+    *estado = extra[0];
+    *n = extra[1];
+    if (*n > N_BLOCOS || *tam > MAX_JPEG) return false;
+    if (*n && !receberTudo(sock, lista, *n, 8000)) return false;
+    return *tam == 0 || receberTudo(sock, jpeg, *tam, 8000);
+}
+
+// Abre o mosaico (em 'jpeg') e põe cada bloco no lugar dele na imagem grande.
+static bool aplicarBlocos(const u8 *lista, int n, u32 tam) {
+    int colunas = n < BLOCOS_X ? n : BLOCOS_X, linhas = (n + BLOCOS_X - 1) / BLOCOS_X, w, h;
+    if (!jpegDecodificar(jpeg, tam, mosaico, 400, colunas * BLOCO_W, linhas * BLOCO_H, &w, &h)) return false;
+    for (int k = 0; k < n; k++) {
+        if (lista[k] >= N_BLOCOS) continue;
+        int mx = (k % BLOCOS_X) * BLOCO_W, my = (k / BLOCOS_X) * BLOCO_H;
+        int dx = (lista[k] % BLOCOS_X) * BLOCO_W, dy = (lista[k] / BLOCOS_X) * BLOCO_H;
+        for (int y = 0; y < BLOCO_H; y++)
+            memcpy(quadroG.pixels + (dy + y) * UI_IMG_LARG + dx, mosaico + (my + y) * 400 + mx, BLOCO_W * sizeof(u16));
+        uiImagemEnviarParte(&quadroG, dx, dy, BLOCO_W, BLOCO_H);
+    }
+    return true;
+}
+
+static void avisoSemSom(void) {
+    uiAviso("Sem som",
+            "Falta o arquivo sdmc:/3ds/dspfirm.cdc.\n\n"
+            "Para criar: abra o menu Rosalina\n"
+            "(L + baixo + SELECT) > Miscellaneous options\n"
+            "> Dump DSP firmware. Depois abra de novo.", IC_MUDO, COR_STEAM);
 }
 
 // ---------------------------------------------------------------- jogando
@@ -356,13 +425,34 @@ static bool jogar(int sock, int i) {
     irrstInit();                        // ZL/ZR e C-stick do New 3DS (no Old falha sem problema)
     aoEsperarRede = amostrarEntrada;
 
-    bool pedido = false, caiu = false, temImagem = false, imagemRapida = false, fechou = false;
-    int pedidoW = 400, pedidoH = 240;   // tamanho do quadro que está a caminho
+    // Com o som (NDSP) ligado, o HOME e a tampa são tratados aqui, como no Sintetizador:
+    // deixar o libctru suspender o app com o DSP tocando pode travar o console.
+    aptSetHomeAllowed(false);
+    bool podiaDormir = aptIsSleepAllowed();
+    aptSetSleepAllowed(false);
+    if (somQuerido && !somIniciar()) {
+        somQuerido = false;
+        avisoSemSom();
+    }
+
+    bool pedido = false, pedidoBlocos = false, precisaTudo = true;
+    bool caiu = false, temImagem = false, imagemRapida = false, fechou = false;
+    int pedidoW = 400;                  // largura do quadro que está a caminho
     u64 inicio = osGetTime(), t0 = osGetTime(), confirmarAte = 0;
-    int quadros = 0;
+    int quadros = 0, blocosSoma = 0;
     float fps = 0;
+    static u8 lista[N_BLOCOS];
+    blocosMedia = 0;
 
     while (aptMainLoop()) {
+        if (aptCheckHomePressRejected()) {
+            bool tinhaSom = somLigado();
+            somEncerrar();
+            aptJumpToHomeMenu();
+            if (aptShouldClose()) break;          // fechou pelo HOME: sai sem religar o som
+            if (tinhaSom) somIniciar();
+            continue;
+        }
         amostrarEntrada();
         u32 down = ctl.down;
         ctl.down = 0;
@@ -371,12 +461,25 @@ static bool jogar(int sock, int i) {
 
         bool voltar = false;
         if ((down & KEY_TOUCH) && tp.py < AREA_Y0 - 4)
-            for (int b = 0; b < 4; b++) {
+            for (int b = 0; b < N_BOT; b++) {
                 if (!uiDentro(&tp, botX(b), BOT_Y, BOT_W, BOT_H)) continue;
                 if (b == 0) voltar = true;
-                if (b == 1) modoImg = (modoImg + 1) % N_MODOS_IMG;
+                if (b == 1) {
+                    modoImg = (modoImg + 1) % N_MODOS_IMG;
+                    precisaTudo = true;             // em Blocos, começa pela tela inteira
+                }
                 if (b == 2) ctl.toqueMouse = !ctl.toqueMouse;
                 if (b == 3) {
+                    if (somLigado()) {
+                        somEncerrar();
+                        somQuerido = false;
+                    } else if (somIniciar()) {
+                        somQuerido = true;
+                    } else {
+                        avisoSemSom();
+                    }
+                }
+                if (b == 4) {
                     if (osGetTime() < confirmarAte) {       // segundo toque: fecha o jogo no PC
                         if (!enviarTexto(sock, "Q\n")) caiu = true;
                         confirmarAte = 0;
@@ -388,33 +491,46 @@ static bool jogar(int sock, int i) {
         if (voltar || caiu) break;
 
         if (!pedido) {
-            pedidoW = larguraPedida();
-            pedidoH = pedidoW * 3 / 5;
-            if (!enviarTexto(sock, "F %d %d\n", pedidoW, pedidoH)) { caiu = true; break; }
+            if (!pedirQuadro(sock, &pedidoBlocos, &pedidoW, precisaTudo)) { caiu = true; break; }
+            if (pedidoBlocos) precisaTudo = false;
             pedido = true;
         }
         u8 estado;
-        int recW = pedidoW, recH = pedidoH;
-        if (!receberResposta(sock, "3DSG", &estado, 1, &tam)) { caiu = true; break; }
+        int nBlocos, recW = pedidoW;
+        bool recBlocos = pedidoBlocos;
+        if (!receberQuadro(sock, recBlocos, &estado, lista, &nBlocos, &tam)) { caiu = true; break; }
         pedido = false;
         if (estado == 2) {
             fechou = true;
             break;
         }
 
-        if (estado == 1 && tam) {
+        // em Blocos, "nada mudou" (0 blocos) também é resposta: pede o próximo na hora
+        if (estado == 1 && (tam || recBlocos)) {
             // pede o próximo ANTES de decodificar este: o PC captura enquanto o 3DS decodifica
-            pedidoW = larguraPedida();
-            pedidoH = pedidoW * 3 / 5;
-            if (!enviarTexto(sock, "F %d %d\n", pedidoW, pedidoH)) { caiu = true; break; }
+            if (!pedirQuadro(sock, &pedidoBlocos, &pedidoW, precisaTudo)) { caiu = true; break; }
+            if (pedidoBlocos) precisaTudo = false;
             pedido = true;
-            UiImagem *im = recW == 200 ? &quadroP : &quadroG;
-            int w, h;
-            if (jpegDecodificar(jpeg, tam, im->pixels, UI_IMG_LARG, recW, recH, &w, &h)) {
-                uiImagemEnviar(im);
-                temImagem = true;
-                imagemRapida = recW == 200;
-                quadros++;
+            if (recBlocos) {
+                if (nBlocos && tam) {
+                    if (aplicarBlocos(lista, nBlocos, tam)) {
+                        temImagem = true;
+                        imagemRapida = false;
+                        quadros++;
+                        blocosSoma += nBlocos;
+                    } else {
+                        precisaTudo = true;         // perdeu um mosaico: pede a tela inteira
+                    }
+                }
+            } else {
+                UiImagem *im = recW == 200 ? &quadroP : &quadroG;
+                int w, h;
+                if (jpegDecodificar(jpeg, tam, im->pixels, UI_IMG_LARG, recW, recW * 3 / 5, &w, &h)) {
+                    uiImagemEnviar(im);
+                    temImagem = true;
+                    imagemRapida = recW == 200;
+                    quadros++;
+                }
             }
         } else {
             // o jogo ainda está abrindo: pergunta de novo daqui a pouco
@@ -427,7 +543,8 @@ static bool jogar(int sock, int i) {
 
         if (osGetTime() - t0 >= 1000) {
             fps = quadros * 1000.0f / (osGetTime() - t0);
-            quadros = 0;
+            blocosMedia = quadros ? (float)blocosSoma / quadros : 0;
+            quadros = blocosSoma = 0;
             t0 = osGetTime();
         }
 
@@ -439,8 +556,12 @@ static bool jogar(int sock, int i) {
     // um quadro ainda a caminho: recebe e descarta, senão ele viraria a resposta do próximo pedido
     if (pedido && !caiu) {
         u8 estado;
-        if (!receberResposta(sock, "3DSG", &estado, 1, &tam)) caiu = true;
+        int n;
+        if (!receberQuadro(sock, pedidoBlocos, &estado, lista, &n, &tam)) caiu = true;
     }
+    somEncerrar();
+    aptSetSleepAllowed(podiaDormir);
+    aptSetHomeAllowed(true);
 
     // avisa o PC que tudo foi solto
     memset(&ctl.p, 0, sizeof(ctl.p));
@@ -475,7 +596,8 @@ void modSteam(void) {
                 "estar instalada no PC.", IC_X, COR_STEAM);
         return;
     }
-    bool okImagens = uiImagemCriar(&atlas, UI_IMG_LARG, UI_IMG_ALT) && uiImagemCriar(&capa, CAPA_W, CAPA_H) &&
+    mosaico = malloc(400 * 240 * sizeof(u16));
+    bool okImagens = mosaico && uiImagemCriar(&atlas, UI_IMG_LARG, UI_IMG_ALT) && uiImagemCriar(&capa, CAPA_W, CAPA_H) &&
                      uiImagemCriar(&quadroG, 400, 240) && uiImagemCriar(&quadroP, 200, 120);
     if (!okImagens) {
         uiImagemLiberar(&atlas);
@@ -484,6 +606,8 @@ void modSteam(void) {
         uiImagemLiberar(&quadroP);
         free(jpeg);
         jpeg = NULL;
+        free(mosaico);
+        mosaico = NULL;
         fecharRede(sock);
         uiAviso("Steam", "Sem memória para as imagens.", IC_X, COR_STEAM);
         return;
@@ -558,6 +682,8 @@ void modSteam(void) {
     fecharRede(sock);
     free(jpeg);
     jpeg = NULL;
+    free(mosaico);
+    mosaico = NULL;
     uiImagemLiberar(&atlas);
     uiImagemLiberar(&capa);
     uiImagemLiberar(&quadroG);
