@@ -12,7 +12,7 @@ if not exist arte\banner.png (echo Falta a arte: rode "py arte\gerar_arte.py". &
 
 "%BT%" makebanner -i arte\banner.png -a arte\banner.wav -o build\banner.bnr || exit /b 1
 rem textos do HOME Menu sem acento (o bannertool le a linha de comando sem UTF-8 no Windows)
-"%BT%" makesmdh -s "3DS Hub" -l "Controle, Segunda Tela, Sintetizador, Camera e Espelho" -p "Bruno" -i arte\icon.png -o build\icon.icn || exit /b 1
+"%BT%" makesmdh -s "3DS Hub" -l "Controle, Segunda Tela, Sintetizador, Camera, Espelho e Steam" -p "Bruno" -i arte\icon.png -o build\icon.icn || exit /b 1
 rem versao do CIA = VERSION_MAJOR/MINOR/MICRO do Makefile
 for /f "tokens=3" %%v in ('findstr /b "VERSION_MAJOR" Makefile') do set VMAJ=%%v
 for /f "tokens=3" %%v in ('findstr /b "VERSION_MINOR" Makefile') do set VMIN=%%v

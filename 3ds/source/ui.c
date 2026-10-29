@@ -464,6 +464,28 @@ void uiImagemDesenharEscala(UiImagem *im, float x, float y, float escala) {
     if (im->ok) C2D_DrawImageAt(im->img, x, y, Z, NULL, escala, escala);
 }
 
+void uiImagemEnviarParte(UiImagem *im, int x0, int y0, int w, int h) {
+    if (!im->ok) return;
+    u16 *destino = (u16 *)im->tex.data;
+    const u32 blocosPorLinha = UI_IMG_LARG / 8;
+    for (int y = y0; y < y0 + h && y < UI_IMG_ALT; y++) {
+        u32 inicioLinha = (y >> 3) * blocosPorLinha * 64;
+        const u16 *origem = im->pixels + y * UI_IMG_LARG;
+        for (int x = x0; x < x0 + w && x < UI_IMG_LARG; x++)
+            destino[inicioLinha + (x >> 3) * 64 + ordemZ(x & 7, y & 7)] = origem[x];
+    }
+    C3D_TexFlush(&im->tex);
+}
+
+void uiImagemDesenharParte(UiImagem *im, int sx, int sy, int w, int h, float x, float y, float escala) {
+    if (!im->ok) return;
+    // mesma conta do uiImagemCriar: a linha 0 da imagem é o topo (v = 1)
+    Tex3DS_SubTexture sub = { (u16)w, (u16)h, (float)sx / UI_IMG_LARG, 1.0f - (float)sy / UI_IMG_ALT,
+                              (float)(sx + w) / UI_IMG_LARG, 1.0f - (float)(sy + h) / UI_IMG_ALT };
+    C2D_Image img = { &im->tex, &sub };
+    C2D_DrawImageAt(img, x, y, Z, NULL, escala, escala);
+}
+
 void uiImagemLiberar(UiImagem *im) {
     if (!im->ok) return;
     C3D_TexDelete(&im->tex);

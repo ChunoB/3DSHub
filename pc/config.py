@@ -155,6 +155,11 @@ PADRAO = {
     "espelho": {
         "qualidade_jpeg": 70,
     },
+
+    # Steam: o jogo na tela de cima do 3DS. Qualidade menor = mais quadros por segundo.
+    "steam": {
+        "qualidade_jpeg": 60,
+    },
 }
 
 

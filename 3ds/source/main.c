@@ -1,4 +1,4 @@
-// 3DS Hub — menu que junta Controle, Segunda Tela, Sintetizador, Câmera, Espelho e Ajustes.
+// 3DS Hub — menu que junta Controle, Segunda Tela, Sintetizador, Câmera, Espelho, Steam e Ajustes.
 //
 // Menu: cruz ou toque = escolher, A = abrir, Y = Ajustes, START = sair
 //
@@ -44,6 +44,9 @@ static const Item itens[] = {
     { "Espelho", "Uma janela do PC aqui",
       "Mostra uma janela do PC na tela de cima, com\nzoom (R/L). Na aba Clicar, toque para clicar.",
       IC_ESPELHO, COR_AZUL, COR_AZUL_CL, modEspelho, true },
+    { "Steam", "Seus jogos do PC aqui",
+      "A biblioteca da Steam do PC. Escolha um jogo:\nele abre no PC e aparece na tela de cima,\ncom os botões do 3DS como controle.",
+      IC_PLAY, COR_STEAM, COR_STEAM_CL, modSteam, true },
     { "Ajustes", "PC, atualização e giroscópio",
       "Procurar o PC, atualizar o app pelo Wi-Fi e\najustar o giroscópio e o touchpad.",
       IC_ENGRENAGEM, COR_CARTAO2, COR_TEXTO2, modAjustes, false },
@@ -51,11 +54,12 @@ static const Item itens[] = {
 #define N_ITENS (int)(sizeof(itens) / sizeof(itens[0]))
 #define ITEM_AJUSTES (N_ITENS - 1)
 
-// grade 2x3 na tela de baixo
+// grade de 2 colunas na tela de baixo; sobrando um no fim (Ajustes), ele ocupa a linha toda
 #define TILE_W 145
-#define TILE_H 70
+#define TILE_H 52
 static float tileX(int i) { return 10 + (i % 2) * (TILE_W + 10); }
-static float tileY(int i) { return 8 + (i / 2) * (TILE_H + 7); }
+static float tileY(int i) { return 8 + (i / 2) * (TILE_H + 6); }
+static float tileW(int i) { return i == N_ITENS - 1 && N_ITENS % 2 ? 2 * TILE_W + 10 : TILE_W; }
 
 // ---------------------------------------------------------------- sonda do Hub
 // Manda um "ping" (3DSP) para a Segunda Tela do PC: se responder, o Hub está no ar.
@@ -221,7 +225,7 @@ static void desenharMenu(int sel, bool temIP) {
     uiTela(alvoBaixo);
     for (int i = 0; i < N_ITENS; i++) {
         bool s = i == sel;
-        uiBotao(tileX(i), tileY(i), TILE_W, TILE_H, itens[i].nome, itens[i].icone,
+        uiBotao(tileX(i), tileY(i), tileW(i), TILE_H, itens[i].nome, itens[i].icone,
                 s ? itens[i].cor : COR_CARTAO, s ? COR_BRANCO : itens[i].corClara);
     }
 }
@@ -261,7 +265,7 @@ int main(int argc, char **argv) {
         // apertouStart: START durante uma conexão pela internet (que segura o menu)
         if ((down & KEY_START) || apertouStart) break;
         if (down & KEY_DLEFT)  sel = sel % 2 ? sel - 1 : sel;
-        if (down & KEY_DRIGHT) sel = sel % 2 ? sel : sel + 1;
+        if (down & KEY_DRIGHT) sel = sel % 2 || sel + 1 >= N_ITENS ? sel : sel + 1;
         if (down & KEY_DUP)    sel = sel >= 2 ? sel - 2 : sel;
         if (down & KEY_DDOWN)  sel = sel + 2 < N_ITENS ? sel + 2 : sel;
         if (down & KEY_A) abrir = sel;
@@ -271,7 +275,7 @@ int main(int argc, char **argv) {
             touchPosition tp;
             hidTouchRead(&tp);
             for (int i = 0; i < N_ITENS; i++)
-                if (uiDentro(&tp, tileX(i), tileY(i), TILE_W, TILE_H)) sel = abrir = i;
+                if (uiDentro(&tp, tileX(i), tileY(i), tileW(i), TILE_H)) sel = abrir = i;
         }
 
         // versão nova na internet: procura sozinho alguns segundos depois de abrir

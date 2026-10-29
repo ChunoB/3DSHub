@@ -12,6 +12,7 @@ ESTRUTURA
   3ds\source\sintetizador.c  teclado/theremin com som (NDSP)
   3ds\source\camera.c     camera do 3DS -> PC (OBS)
   3ds\source\espelho.c    janela do PC -> tela de cima (zoom e aba Clicar)
+  3ds\source\steam.c      biblioteca da Steam do PC; o jogo na tela de cima + controle
   3ds\source\ajustes.c    procurar PC, IP, atualizar o app, acesso pela internet, giroscopio/touchpad
   3ds\source\tunel.c      acesso pela internet: HTTPS + WebSocket ate o portao do PC
   3ds\source\updater.c    atualizacao pelo GitHub (releases)
@@ -30,13 +31,15 @@ ESTRUTURA
   pc\ajustes.py           porta 5010 (TCP) - atualizacao do app, ajustes e pareamento
   pc\remoto.py            porta 5011 (so no proprio PC) - portao do acesso pela internet
                           (cloudflared + endereco publicado no ntfy.sh)
+  pc\steam.py             porta 5012 (TCP) - jogos da Steam, capas, abrir o jogo e a imagem dele
+                          (os botoes vao pelo Controle, porta 5005)
   pc\util.py              teclado/mouse, cliques, IPs do PC
 
 COMPILAR O APP DO 3DS (Windows)
 1. Instale o devkitPro (https://github.com/devkitPro/installer/releases)
    marcando "3DS Development".
-2. Instale a biblioteca de JPEG. No terminal MSYS2 do devkitPro:
-     pacman -S 3ds-libjpeg-turbo
+2. Instale as bibliotecas de JPEG e de HTTPS. No terminal MSYS2 do devkitPro:
+     pacman -S 3ds-libjpeg-turbo 3ds-curl 3ds-mbedtls 3ds-zlib
 3. Na mesma janela, entre na pasta 3ds e rode:
      make
    Sai o 3dshub.3dsx (e o 3dshub.elf).

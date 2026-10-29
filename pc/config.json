@@ -202,5 +202,8 @@
   },
   "espelho": {
     "qualidade_jpeg": 70
+  },
+  "steam": {
+    "qualidade_jpeg": 60
   }
 }

@@ -28,18 +28,7 @@
 
 #define COR_TOQUE      C2D_Color32(0x7F, 0x77, 0xDD, 0x70)   // roxo translúcido
 
-// O servidor lê com '<4sIIhhhhHHBBhhh' (32 bytes).
-typedef struct __attribute__((packed)) {
-    char magic[4];       // "3DS2"
-    u32  seq;
-    u32  keys;
-    s16  cx, cy;
-    s16  sx, sy;
-    u16  tx, ty;
-    u8   tocando;
-    u8   flags;
-    s16  guinada, inclinacao, rolagem;   // giroscópio em décimos de grau/s
-} Pacote;
+typedef PacoteControle Pacote;           // comum.h (a Steam manda o mesmo pacote)
 
 static s16 limitar(float v, float max) {
     if (v >  max) v =  max;

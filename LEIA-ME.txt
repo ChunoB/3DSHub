@@ -58,6 +58,27 @@ USAR LONGE DE CASA (PELA INTERNET)
   atraso da internet. Redes com pagina de login (eduroam, Wi-Fi da
   faculdade) nao funcionam no 3DS: use o hotspot do celular.
 
+STEAM (SEUS JOGOS DO PC NO 3DS)
+- No menu do 3DS, abra "Steam": aparecem os jogos instalados na Steam do
+  PC, com a capa e o tempo jogado (sem login: o Hub le os arquivos da
+  Steam do PC).
+- Escolha um jogo e aperte A (ou toque nele de novo): ele abre no PC e a
+  janela do jogo aparece na tela de cima do 3DS.
+- Os botoes do 3DS viram um controle de Xbox no PC (igual ao modulo
+  Controle, com os mesmos perfis). Na tela de baixo:
+  * LT / RT: metade esquerda e direita da tela sao os gatilhos (o Old 3DS
+    nao tem ZL/ZR). Ou troque para "Mouse" e use a tela como touchpad.
+  * Rapido / Nitido: Rapido manda a imagem menor (200x120, ampliada) e da
+    mais quadros por segundo; e o padrao no Old 3DS.
+  * Fechar: fecha o jogo no PC (toque duas vezes para confirmar).
+  * START+SELECT (ou Voltar): volta para a biblioteca; o jogo continua
+    aberto no PC.
+- Deixe o jogo em janela ou "tela cheia sem bordas" (borderless). Em tela
+  cheia exclusiva alguns jogos aparecem pretos.
+- Conta com poucos quadros por segundo (uns 10 a 20): bom para jogos
+  calmos (cartas, turnos, plataforma simples), ruim para tiro e luta.
+- Precisa da pasta pc da versao 1.6.0 no PC (rode o instalar.bat).
+
 ATUALIZAR SEM TIRAR O CARTAO
 - Pela internet: ao abrir, o 3DS Hub procura versao nova no GitHub
   sozinho e pergunta "Atualizar agora?". Na mao: Ajustes > Atualizar
@@ -66,7 +87,13 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.5.1)
+O QUE MUDOU NESTA VERSAO (1.6.0)
+- Novo modulo Steam: a biblioteca da Steam do PC no 3DS. O jogo abre no
+  PC, aparece na tela de cima e o 3DS vira o controle (veja "STEAM" acima).
+- O menu ganhou uma linha a mais para caber a Steam.
+- Atualize tambem a pasta pc do PC (e rode o instalar.bat).
+
+VERSAO 1.5.1
 - Fechar pelo HOME com a Camera aberta nao demora mais: a camera e
   desligada ao ir para o HOME (ou fechar a tampa) e religada na volta.
 - Sintetizador: o som e desligado antes do HOME (evita travar o 3DS).

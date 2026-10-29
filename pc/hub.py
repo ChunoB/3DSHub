@@ -4,7 +4,7 @@
 
 Junta tudo: Descoberta (5009), Ajustes e atualização do app (5010),
 Controle (5005), Segunda Tela (5006), Câmera (5007 + OBS em
-http://127.0.0.1:8090/obs) e Espelho (5008).
+http://127.0.0.1:8090/obs), Espelho (5008) e Steam (5012).
 
 Rodar escondido (sem janela):  pythonw hub.py
 Rodar vendo os logs:            py hub.py
@@ -44,6 +44,7 @@ from espelho import Espelho                      # noqa: E402
 from descoberta import Descoberta                # noqa: E402
 from ajustes import Ajustes                      # noqa: E402
 from remoto import Remoto                        # noqa: E402
+from steam import Steam                          # noqa: E402
 
 try:
     from controle import Controle                # noqa: E402
@@ -109,7 +110,7 @@ def main():
         def url_obs(self): return f"http://127.0.0.1:{config['camera']['porta_http']}/obs"
 
     classes = {"Controle": Controle, "Segunda Tela": SegundaTela, "Camera": Camera, "Espelho": Espelho,
-               "Descoberta": Descoberta, "Ajustes": Ajustes, "Remoto": Remoto}
+               "Descoberta": Descoberta, "Ajustes": Ajustes, "Remoto": Remoto, "Steam": Steam}
     servicos, erros = {}, []
     for nome, classe in classes.items():
         servicos[nome] = Falhou()
@@ -134,7 +135,7 @@ def main():
     # pelo nome (não pela ordem), para não quebrar quando entrar serviço novo
     controle, tela = servicos["Controle"], servicos["Segunda Tela"]
     camera, espelho = servicos["Camera"], servicos["Espelho"]
-    remoto = servicos["Remoto"]
+    remoto, steam = servicos["Remoto"], servicos["Steam"]
 
     def linha_remoto(_):
         if "Remoto" in erros:
@@ -203,6 +204,9 @@ def main():
             "Camera", camera,
             f" ({camera.status['fps']:.1f} fps)" if camera.status.get("conectado") else ""), None, enabled=False),
         pystray.MenuItem(lambda _: linha_status("Espelho", espelho), None, enabled=False),
+        pystray.MenuItem(lambda _: linha_status(
+            "Steam", steam,
+            f" - {steam.status['jogo']}" if steam.status.get("jogo") else ""), None, enabled=False),
         pystray.MenuItem(linha_remoto, None, enabled=False),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Acesso pela internet", alternar_remoto,

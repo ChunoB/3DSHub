@@ -32,6 +32,8 @@
 #define COR_CORAL_CL   HEX(0xF0997B)
 #define COR_AZUL       HEX(0x378ADD)   // Espelho
 #define COR_AZUL_CL    HEX(0x85B7EB)
+#define COR_STEAM      HEX(0x5C8A1E)   // Steam (o verde do botão Jogar)
+#define COR_STEAM_CL   HEX(0xA4D007)
 #define COR_VERDE      HEX(0x97C459)
 #define COR_AMARELO    HEX(0xEF9F27)
 #define COR_VERMELHO   HEX(0xE24B4A)
@@ -107,4 +109,8 @@ bool uiImagemCriar(UiImagem *im, int w, int h);
 void uiImagemEnviar(UiImagem *im);
 void uiImagemDesenhar(UiImagem *im, float x, float y);
 void uiImagemDesenharEscala(UiImagem *im, float x, float y, float escala);
+// Um pedaço da imagem (ex.: várias capas pequenas numa textura só): envia só a
+// região que mudou / desenha só o retângulo (sx, sy, w, h) dela.
+void uiImagemEnviarParte(UiImagem *im, int x0, int y0, int w, int h);
+void uiImagemDesenharParte(UiImagem *im, int sx, int sy, int w, int h, float x, float y, float escala);
 void uiImagemLiberar(UiImagem *im);

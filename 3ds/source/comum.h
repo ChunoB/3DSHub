@@ -58,8 +58,23 @@ bool jpegCodificar(const u16 *rgb565, int w, int h, int qualidade, u8 **saida, u
 bool jpegDecodificar(const u8 *dados, unsigned long tam, u16 *destino, int larguraLinha,
                      int maxW, int maxH, int *w, int *h);
 
+// Pacote do Controle (UDP 5005), usado pelo Controle e pela Steam.
+// O servidor lê com '<4sIIhhhhHHBBhhh' (32 bytes).
+typedef struct __attribute__((packed)) {
+    char magic[4];       // "3DS2"
+    u32  seq;
+    u32  keys;
+    s16  cx, cy;
+    s16  sx, sy;
+    u16  tx, ty;
+    u8   tocando;
+    u8   flags;
+    s16  guinada, inclinacao, rolagem;   // giroscópio em décimos de grau/s
+} PacoteControle;
+
 // Módulos
 void modControle(void);
+void modSteam(void);
 void modTela(void);
 void modSintetizador(void);
 void modCamera(void);

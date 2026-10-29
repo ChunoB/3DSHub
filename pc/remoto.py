@@ -8,7 +8,7 @@ Como funciona:
     atual num canal secreto do ntfy.sh, e o 3DS lê de lá.
   * Para entrar é preciso o código (token) que o 3DS recebe ao parear em casa.
     Sem ele o portão recusa tudo.
-  * Cada conexão do 3DS pede uma porta (5005 a 5010). O portão liga essa conexão
+  * Cada conexão do 3DS pede uma porta (5005 a 5010, e 5012 da Steam). O portão liga essa conexão
     ao serviço de sempre do Hub no próprio PC, então nada mais precisa mudar.
     Portas TCP viram um fluxo de bytes, portas UDP viram uma mensagem por pacote.
 
@@ -39,7 +39,7 @@ CLOUDFLARED = os.path.join(PASTA, "cloudflared.exe")
 URL_CLOUDFLARED = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
 NTFY = "https://ntfy.sh/"
 PORTA_PORTAO = 5011
-PORTAS_TCP = {5007, 5008, 5010}       # Câmera, Espelho, Ajustes
+PORTAS_TCP = {5007, 5008, 5010, 5012}  # Câmera, Espelho, Ajustes, Steam
 PORTAS_UDP = {5005, 5006}             # Controle, Segunda Tela
 REPUBLICAR_S = 3 * 3600               # o ntfy guarda as mensagens por 12 h
 GUID_WS = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"   # fixo, do padrão WebSocket (RFC 6455)
