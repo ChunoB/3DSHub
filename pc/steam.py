@@ -4,6 +4,10 @@ Lê os jogos instalados direto dos arquivos da Steam (sem login), manda as capas
 abre o jogo pelo link steam:// e depois manda a imagem da janela do jogo, como o
 Espelho. Os botões vão pelo Controle (UDP 5005), como um controle de Xbox.
 
+A imagem do jogo é copiada sem parar numa thread (Captura) e o último quadro fica
+pronto: o 3DS recebe na hora, sem esperar a cópia. Com o jogo na frente, a cópia usa
+o Desktop Duplication (dxcam, o mesmo do OBS), bem mais rápido que o GDI.
+
 Protocolo (TCP 5012, o 3DS pede e o PC responde):
     "J\\n"           -> "3DSJ" + u32 tamanho + linhas "appid\\tnome\\tminutos jogados\\n"
                         (do jogado mais recente para o mais antigo)
@@ -35,7 +39,14 @@ from PIL import Image, ImageDraw, ImageGrab
 from espelho import capturar, texto
 from util import trazer_para_frente
 
+try:
+    import dxcam                 # captura rápida (Desktop Duplication)
+    import numpy as np
+except Exception:                # sem a biblioteca: usa a cópia comum (mais lenta)
+    dxcam = None
+
 PORTA = 5012
+QUADROS_POR_SEGUNDO = 30         # no máximo; o 3DS pega o último pronto
 PASTA = os.path.dirname(os.path.abspath(__file__))
 PASTA_CAPAS = os.path.join(PASTA, "capas")       # capas baixadas da internet
 MAX_JOGOS = 200
@@ -246,23 +257,114 @@ def achar_janela(jogo, antes, desde):
     return None
 
 
-def capturar_jogo(hwnd):
-    """Só a parte de dentro da janela (sem a barra de título). Com o jogo na frente,
-    copia da tela (rápido e funciona com jogos em DirectX); atrás de outra janela,
-    usa o PrintWindow do Espelho."""
+class TelaRapida:
+    """Cópia da tela pelo Desktop Duplication: uns 10 ms em 1080p, contra 50 a 90 ms
+    do GDI. Só no monitor principal; fora dele (ou sem o dxcam) usa a cópia comum."""
+
+    def __init__(self):
+        self.cam = dxcam.create(output_idx=0, output_color="BGRA")
+        self.w, self.h = self.cam.width, self.cam.height
+        self.caixa = None                # o que o último quadro mostrou
+
+    def copiar(self, caixa, largura_alvo):
+        """(True, imagem), (True, None) = a tela não mudou, (False, None) = não deu."""
+        l, t, r, b = caixa
+        if l < 0 or t < 0 or r > self.w or b > self.h:
+            return False, None
+        mesma = caixa == self.caixa
+        a = self.cam.grab(region=caixa, new_frame_only=mesma)
+        if a is None:
+            return mesma, None
+        self.caixa = caixa
+        # pula pixels já aqui (fica com uns 2x o tamanho final): converter 1080p
+        # inteiro para o Pillow custaria mais que a própria cópia
+        passo = max(1, int((r - l) / (2 * largura_alvo)))
+        if passo > 1:
+            a = a[::passo, ::passo]
+        a = np.ascontiguousarray(a)
+        return True, Image.frombuffer("RGB", (a.shape[1], a.shape[0]), a.tobytes(), "raw", "BGRX", 0, 1)
+
+
+def capturar_jogo(hwnd, tela=None, largura_alvo=400):
+    """Só a parte de dentro da janela (sem a barra de título). None = nada novo.
+    Com o jogo na frente, copia da tela (funciona com jogos em DirectX); atrás de
+    outra janela, usa o PrintWindow e, se o jogo não deixar, espera ele voltar para
+    a frente (copiar a tela ali mostraria a janela que está por cima)."""
     if win32gui.IsIconic(hwnd):
         return None
     esq, topo = win32gui.ClientToScreen(hwnd, (0, 0))
     _, _, w, h = win32gui.GetClientRect(hwnd)
     if w < 16 or h < 16:
         return None
+    caixa = (esq, topo, esq + w, topo + h)
     if win32gui.GetForegroundWindow() == hwnd:
-        return ImageGrab.grab(bbox=(esq, topo, esq + w, topo + h), all_screens=True)
-    img = capturar(hwnd)
+        if tela:
+            ok, img = tela.copiar(caixa, largura_alvo)
+            if ok:
+                return img
+        return ImageGrab.grab(bbox=caixa, all_screens=True)
+    img = capturar(hwnd, so_janela=True)
     if img is None:
         return None
     x0, y0, _, _ = win32gui.GetWindowRect(hwnd)
     return img.crop((esq - x0, topo - y0, esq - x0 + w, topo - y0 + h))
+
+
+class Captura:
+    """Copia a janela do jogo sem parar (até QUADROS_POR_SEGUNDO) e guarda o último
+    quadro já em JPEG. Só trabalha enquanto o 3DS está pedindo quadros."""
+
+    def __init__(self, config):
+        self.config = config
+        self.hwnd, self.tam = None, (400, 240)
+        self.quadro = (0, None, b"")     # (número, (w, h), jpeg)
+        self.pedido_em = 0.0
+        self.ativa = True
+        self.cond = threading.Condition()
+        threading.Thread(target=self._loop, daemon=True, name="steam-captura").start()
+
+    def parar(self):
+        self.ativa = False
+
+    def _loop(self):
+        tela = None
+        if dxcam:
+            try:
+                tela = TelaRapida()
+            except Exception as e:
+                print("Steam: captura rápida indisponível, usando a comum:", repr(e))
+        while self.ativa:
+            hwnd, (w, h) = self.hwnd, self.tam
+            if not hwnd or time.monotonic() - self.pedido_em > 2:   # 3DS na biblioteca
+                time.sleep(0.05)
+                continue
+            t0 = time.monotonic()
+            try:
+                img = capturar_jogo(hwnd, tela, w)
+                if img is not None:
+                    jpeg = quadro_jpeg(img, w, h, self.config["steam"]["qualidade_jpeg"])
+                    with self.cond:
+                        self.quadro = (self.quadro[0] + 1, (w, h), jpeg)
+                        self.cond.notify_all()
+            except Exception as e:
+                print("Steam: erro ao capturar", repr(e))
+                time.sleep(0.2)
+            time.sleep(max(0.003, 1 / QUADROS_POR_SEGUNDO - (time.monotonic() - t0)))
+
+    def proximo(self, hwnd, depois_de, w, h, espera=0.25):
+        """Um quadro mais novo que 'depois_de' no tamanho pedido. Se a imagem não mudou
+        nesse tempo, repete o último (o 3DS continua o ciclo). (número, jpeg)."""
+        self.hwnd, self.tam, self.pedido_em = hwnd, (w, h), time.monotonic()
+        fim = time.monotonic() + espera
+        with self.cond:
+            while True:
+                n, tam, jpeg = self.quadro
+                if n > depois_de and tam == (w, h):
+                    return n, jpeg
+                resto = fim - time.monotonic()
+                if resto <= 0:
+                    return (n, jpeg) if tam == (w, h) else (depois_de, b"")
+                self.cond.wait(resto)
 
 
 def quadro_jpeg(img, w, h, qualidade):
@@ -311,9 +413,17 @@ class Steam:
     def _atender(self, conn):
         conn.settimeout(60)
         arquivo = conn.makefile("rb")
+        captura = Captura(self.config)
+        try:
+            self._comandos(conn, arquivo, captura)
+        finally:
+            captura.parar()
+
+    def _comandos(self, conn, arquivo, captura):
         jogos = {}
         jogo = janela = None               # jogo aberto pelo 3DS e a janela dele
         antes, desde, achou_uma_vez, sumiu_em = set(), 0.0, False, None
+        enviado = 0                         # número do último quadro mandado
 
         def responder(magica, dados, extra=b""):
             conn.sendall(magica + struct.pack("<I", len(dados)) + extra + dados)
@@ -351,6 +461,7 @@ class Steam:
                 else:
                     antes = {h for h, _ in janelas_visiveis()}
                     desde, janela, achou_uma_vez, sumiu_em = time.monotonic(), None, False, None
+                    enviado = 0
                     # já aberto? usa a janela que existe (não abre outro)
                     janela = achar_janela(jogo, set(), desde)
                     if janela:
@@ -382,13 +493,8 @@ class Steam:
                             trazer_para_frente(janela)   # para o controle ir para o jogo
                     if janela:
                         sumiu_em = None
-                        try:
-                            img = capturar_jogo(janela)
-                            if img:
-                                dados = quadro_jpeg(img, w, h, self.config["steam"]["qualidade_jpeg"])
-                                estado = 1
-                        except Exception as e:
-                            print("Steam: erro ao capturar", repr(e))
+                        enviado, dados = captura.proximo(janela, enviado, w, h)
+                        estado = 1 if dados else 0
                     elif achou_uma_vez:
                         # a janela sumiu: pode ser só a tela de abertura trocando pela do
                         # jogo. Só diz que fechou depois de alguns segundos sem janela.

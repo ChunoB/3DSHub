@@ -477,6 +477,10 @@ void uiImagemEnviarParte(UiImagem *im, int x0, int y0, int w, int h) {
     C3D_TexFlush(&im->tex);
 }
 
+void uiImagemFiltro(UiImagem *im, bool suave) {
+    if (im->ok) C3D_TexSetFilter(&im->tex, suave ? GPU_LINEAR : GPU_NEAREST, suave ? GPU_LINEAR : GPU_NEAREST);
+}
+
 void uiImagemDesenharParte(UiImagem *im, int sx, int sy, int w, int h, float x, float y, float escala) {
     if (!im->ok) return;
     // mesma conta do uiImagemCriar: a linha 0 da imagem é o topo (v = 1)

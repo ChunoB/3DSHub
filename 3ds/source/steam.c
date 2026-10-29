@@ -43,7 +43,13 @@ static int donoSlot[N_SLOTS];           // de qual jogo é cada miniatura do atl
 static UiImagem atlas, capa, quadroG, quadroP;   // quadroG 400x240, quadroP 200x120 (modo rápido)
 static int capaDe = -1;                 // de qual jogo é a capa grande carregada
 static u8 *jpeg;                        // MAX_JPEG + 1 (o +1 é o 0 do fim dos textos)
-static int rapido = -1;                 // imagem 200x120 ampliada (mais quadros); -1 = ainda não escolheu
+// Imagem do jogo (botão na tela de baixo, passa de um para o outro):
+//   Nítido = 400x240; Rápido = 200x120 ampliada e suavizada (mais quadros por segundo);
+//   Retro  = 200x120 com pixels quadrados e linhas de TV antiga (custa o mesmo que o Rápido)
+enum { IMG_NITIDO, IMG_RAPIDO, IMG_RETRO, N_MODOS_IMG };
+static const char *nomeModoImg[N_MODOS_IMG] = { "Nítido", "Rápido", "Retro" };
+static int modoImg = -1;                // -1 = ainda não escolheu (depende de Old/New 3DS)
+static int larguraPedida(void) { return modoImg == IMG_NITIDO ? 400 : 200; }
 
 // ---------------------------------------------------------------- rede
 
@@ -276,9 +282,16 @@ static void amostrarEntrada(void) {
 
 static void desenharJogo(int i, bool temImagem, bool imagemRapida, float fps, u64 abrindoMs, bool confirmar) {
     uiTela(alvoCima);
-    if (temImagem) {
-        if (imagemRapida) uiImagemDesenharEscala(&quadroP, 0, 0, 2.0f);
-        else              uiImagemDesenhar(&quadroG, 0, 0);
+    if (temImagem && imagemRapida) {
+        // a imagem pequena dobra de tamanho: suavizada (Rápido) ou com pixels
+        // quadrados e as linhas escuras das TVs antigas (Retro). Quem faz é a GPU.
+        bool retro = modoImg == IMG_RETRO;
+        uiImagemFiltro(&quadroP, !retro);
+        uiImagemDesenharEscala(&quadroP, 0, 0, 2.0f);
+        if (retro)
+            for (int y = 1; y < 240; y += 2) uiRet(0, y, 400, 1, C2D_Color32(0, 0, 0, 0x58));
+    } else if (temImagem) {
+        uiImagemDesenhar(&quadroG, 0, 0);
     } else {
         uiBarraStatus("Steam", IC_PLAY, COR_STEAM_CL);
         desenharCapaGrande(i);
@@ -289,7 +302,7 @@ static void desenharJogo(int i, bool temImagem, bool imagemRapida, float fps, u6
     }
 
     uiTela(alvoBaixo);
-    const char *rotulos[4] = { "Voltar", rapido ? "Rápido" : "Nítido", ctl.toqueMouse ? "Mouse" : "LT / RT",
+    const char *rotulos[4] = { "Voltar", nomeModoImg[modoImg], ctl.toqueMouse ? "Mouse" : "LT / RT",
                                confirmar ? "Certeza?" : "Fechar" };
     for (int b = 0; b < 4; b++) {
         u32 fundo = b == 3 && confirmar ? COR_VERMELHO : b == 1 || b == 2 ? COR_CARTAO2 : COR_CARTAO;
@@ -361,7 +374,7 @@ static bool jogar(int sock, int i) {
             for (int b = 0; b < 4; b++) {
                 if (!uiDentro(&tp, botX(b), BOT_Y, BOT_W, BOT_H)) continue;
                 if (b == 0) voltar = true;
-                if (b == 1) rapido = !rapido;
+                if (b == 1) modoImg = (modoImg + 1) % N_MODOS_IMG;
                 if (b == 2) ctl.toqueMouse = !ctl.toqueMouse;
                 if (b == 3) {
                     if (osGetTime() < confirmarAte) {       // segundo toque: fecha o jogo no PC
@@ -375,8 +388,8 @@ static bool jogar(int sock, int i) {
         if (voltar || caiu) break;
 
         if (!pedido) {
-            pedidoW = rapido ? 200 : 400;
-            pedidoH = rapido ? 120 : 240;
+            pedidoW = larguraPedida();
+            pedidoH = pedidoW * 3 / 5;
             if (!enviarTexto(sock, "F %d %d\n", pedidoW, pedidoH)) { caiu = true; break; }
             pedido = true;
         }
@@ -391,8 +404,8 @@ static bool jogar(int sock, int i) {
 
         if (estado == 1 && tam) {
             // pede o próximo ANTES de decodificar este: o PC captura enquanto o 3DS decodifica
-            pedidoW = rapido ? 200 : 400;
-            pedidoH = rapido ? 120 : 240;
+            pedidoW = larguraPedida();
+            pedidoH = pedidoW * 3 / 5;
             if (!enviarTexto(sock, "F %d %d\n", pedidoW, pedidoH)) { caiu = true; break; }
             pedido = true;
             UiImagem *im = recW == 200 ? &quadroP : &quadroG;
@@ -475,10 +488,10 @@ void modSteam(void) {
         uiAviso("Steam", "Sem memória para as imagens.", IC_X, COR_STEAM);
         return;
     }
-    if (rapido < 0) {                   // Old 3DS: imagem menor (mais quadros por segundo)
+    if (modoImg < 0) {                  // Old 3DS: imagem menor (mais quadros por segundo)
         bool novo = false;
         APT_CheckNew3DS(&novo);
-        rapido = !novo;
+        modoImg = novo ? IMG_NITIDO : IMG_RETRO;
     }
 
     hidSetRepeatParameters(20, 5);

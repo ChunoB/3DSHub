@@ -68,15 +68,18 @@ STEAM (SEUS JOGOS DO PC NO 3DS)
   Controle, com os mesmos perfis). Na tela de baixo:
   * LT / RT: metade esquerda e direita da tela sao os gatilhos (o Old 3DS
     nao tem ZL/ZR). Ou troque para "Mouse" e use a tela como touchpad.
-  * Rapido / Nitido: Rapido manda a imagem menor (200x120, ampliada) e da
-    mais quadros por segundo; e o padrao no Old 3DS.
+  * Nitido / Rapido / Retro (toque para trocar): Nitido manda 400x240.
+    Rapido manda 200x120 ampliada e da mais quadros por segundo. Retro e a
+    mesma imagem pequena com pixels quadrados e as linhas das TVs antigas
+    (fica mais bonito que o Rapido e custa o mesmo); e o padrao no Old 3DS.
   * Fechar: fecha o jogo no PC (toque duas vezes para confirmar).
   * START+SELECT (ou Voltar): volta para a biblioteca; o jogo continua
     aberto no PC.
 - Deixe o jogo em janela ou "tela cheia sem bordas" (borderless). Em tela
   cheia exclusiva alguns jogos aparecem pretos.
-- Conta com poucos quadros por segundo (uns 10 a 20): bom para jogos
-  calmos (cartas, turnos, plataforma simples), ruim para tiro e luta.
+- O PC copia o jogo sem parar e deixa o ultimo quadro pronto, pela mesma
+  captura rapida do OBS (Desktop Duplication). Jogos calmos (cartas,
+  turnos, plataforma simples) ficam bem; tiro e luta ainda sentem o atraso.
 - Precisa da pasta pc da versao 1.6.0 no PC (rode o instalar.bat).
 
 ATUALIZAR SEM TIRAR O CARTAO
@@ -87,7 +90,14 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.6.0)
+O QUE MUDOU NESTA VERSAO (1.6.1)
+- Steam bem mais fluida: o PC copia o jogo sem parar, numa captura uns 5x
+  mais rapida (Desktop Duplication), e o 3DS recebe o quadro na hora.
+- Modo Retro: imagem pequena com pixels quadrados e linhas de TV antiga.
+- Com o jogo atras de outra janela, o PC nao manda mais a janela errada.
+- Atualize tambem a pasta pc do PC e rode o instalar.bat (biblioteca nova).
+
+VERSAO 1.6.0
 - Novo modulo Steam: a biblioteca da Steam do PC no 3DS. O jogo abre no
   PC, aparece na tela de cima e o 3DS vira o controle (veja "STEAM" acima).
 - O menu ganhou uma linha a mais para caber a Steam.

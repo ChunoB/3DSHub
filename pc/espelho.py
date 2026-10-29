@@ -66,8 +66,10 @@ def listar_janelas():
     return janelas[:MAX_JANELAS]
 
 
-def capturar(hwnd):
-    """Captura a janela mesmo se estiver atrás de outras (PrintWindow)."""
+def capturar(hwnd, so_janela=False):
+    """Captura a janela mesmo se estiver atrás de outras (PrintWindow).
+    so_janela: se a janela não aceitar, volta None em vez de copiar da tela
+    (que mostraria o que estiver por cima dela)."""
     x0, y0, x1, y1 = win32gui.GetWindowRect(hwnd)
     w, h = x1 - x0, y1 - y0
     if w <= 0 or h <= 0:
@@ -94,6 +96,8 @@ def capturar(hwnd):
             dc.DeleteDC()
         win32gui.ReleaseDC(hwnd, dc_janela)
     if not ok or img.getbbox() is None:      # algumas janelas não aceitam: pega da tela
+        if so_janela:
+            return None
         img = ImageGrab.grab(bbox=(x0, y0, x1, y1), all_screens=True)
     return img
 

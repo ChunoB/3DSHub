@@ -112,5 +112,7 @@ void uiImagemDesenharEscala(UiImagem *im, float x, float y, float escala);
 // Um pedaço da imagem (ex.: várias capas pequenas numa textura só): envia só a
 // região que mudou / desenha só o retângulo (sx, sy, w, h) dela.
 void uiImagemEnviarParte(UiImagem *im, int x0, int y0, int w, int h);
+// Ampliada: suave = mistura os pixels (padrão); senão, pixels quadrados (visual retrô).
+void uiImagemFiltro(UiImagem *im, bool suave);
 void uiImagemDesenharParte(UiImagem *im, int sx, int sy, int w, int h, float x, float y, float escala);
 void uiImagemLiberar(UiImagem *im);
