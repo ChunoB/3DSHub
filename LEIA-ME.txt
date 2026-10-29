@@ -90,7 +90,13 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.6.1)
+O QUE MUDOU NESTA VERSAO (1.6.2)
+- Steam: jogos que ignoram a escala do Windows (ex.: Balatro com a tela em
+  125%) apareciam pequenos, no canto da tela de cima, quando estavam atras
+  de outra janela no PC. Agora ocupam a tela toda.
+- Atualize tambem a pasta pc do PC.
+
+VERSAO 1.6.1
 - Steam bem mais fluida: o PC copia o jogo sem parar, numa captura uns 5x
   mais rapida (Desktop Duplication), e o 3DS recebe o quadro na hora.
 - Modo Retro: imagem pequena com pixels quadrados e linhas de TV antiga.

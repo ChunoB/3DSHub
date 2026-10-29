@@ -43,6 +43,8 @@ COMPILAR O APP DO 3DS (Windows)
 3. Na mesma janela, entre na pasta 3ds e rode:
      make
    Sai o 3dshub.3dsx (e o 3dshub.elf).
+   Mudou a versao no Makefile? Rode "make clean" antes do "make": sem isso o
+   app continua dizendo a versao antiga e o 3DS oferece atualizacao sem parar.
 
 GERAR O CIA (opcional, para o HOME Menu)
 1. Baixe para uma pasta "ferramentas" ao lado da pasta 3ds:

@@ -18,6 +18,7 @@ Protocolo (TCP 5012, o 3DS pede e o PC responde):
     "Q\\n"           -> fecha o jogo (como clicar no X da janela; sem resposta)
 """
 
+import ctypes
 import glob
 import io
 import os
@@ -307,7 +308,29 @@ def capturar_jogo(hwnd, tela=None, largura_alvo=400):
     if img is None:
         return None
     x0, y0, _, _ = win32gui.GetWindowRect(hwnd)
-    return img.crop((esq - x0, topo - y0, esq - x0 + w, topo - y0 + h))
+    # Jogo que não conhece a escala do Windows (ex.: Balatro com a tela em 125%): ele
+    # desenha menor e o Windows estica só na tela. A cópia da janela vem sem esticar,
+    # com o jogo no canto: recorta só a parte desenhada (o tamanho volta ao normal
+    # quando a imagem é ajustada para o 3DS).
+    f = escala_desenho(hwnd)
+    return img.crop((round((esq - x0) * f), round((topo - y0) * f),
+                     round((esq - x0 + w) * f), round((topo - y0 + h) * f)))
+
+
+def escala_desenho(hwnd):
+    """Quanto do tamanho real a janela desenha: 1.0 normalmente; 0.8 num jogo que
+    ignora a escala de 125% do Windows."""
+    try:
+        user32 = ctypes.windll.user32
+        janela = user32.GetDpiForWindow(hwnd)
+        monitor = ctypes.c_uint(0)
+        ctypes.windll.shcore.GetDpiForMonitor(user32.MonitorFromWindow(hwnd, 2), 0,
+                                              ctypes.byref(monitor), ctypes.byref(ctypes.c_uint(0)))
+        if janela and monitor.value and janela < monitor.value:
+            return janela / monitor.value
+    except Exception:
+        pass
+    return 1.0
 
 
 class Captura:
