@@ -137,7 +137,12 @@ LIGAR E SUSPENDER O PC PELO 3DS
   magico para ativar o computador". Se a aba "Avancado" tiver "Wake on
   Magic Packet" ou "WoWLAN", deixe ativado.
 
-O QUE MUDOU NESTA VERSAO (1.11.0)
+O QUE MUDOU NESTA VERSAO (1.11.1)
+- New 3DS: o app usa o processador mais rapido (804 MHz) e o cache extra
+  do New (no Old nada muda). ZL, ZR e C-stick ja funcionavam no Controle
+  e na Steam.
+
+VERSAO 1.11.0
 - Espelho: "Tela inteira" no topo da lista (uma por monitor), alem das
   janelas. Zoom, cliques, rolagem e teclado funcionam nela tambem.
 - Espelho, teclado novo na tela de baixo (botao Teclado ou SELECT): cada

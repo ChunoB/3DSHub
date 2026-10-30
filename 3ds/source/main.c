@@ -248,6 +248,7 @@ int main(int argc, char **argv) {
     updater_init("ChunoB/3DSHub", APP_VERSION, "3dshub.3dsx", caminhoApp);
     romfsInit();
     gfxInitDefault();
+    osSetSpeedupEnable(true);   // New 3DS: 804 MHz e cache L2 (no Old não faz nada)
     uiIniciar();
 
     u32 *socBuf = memalign(SOC_ALIGN, SOC_BUFFERSIZE);
