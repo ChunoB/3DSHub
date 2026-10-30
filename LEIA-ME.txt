@@ -137,7 +137,14 @@ LIGAR E SUSPENDER O PC PELO 3DS
   magico para ativar o computador". Se a aba "Avancado" tiver "Wake on
   Magic Packet" ou "WoWLAN", deixe ativado.
 
-O QUE MUDOU NESTA VERSAO (1.11.2)
+O QUE MUDOU NESTA VERSAO (1.11.3)
+- Acesso pela internet: quando o tunel da Cloudflare nao abre (redes que
+  bloqueiam, como algumas de faculdade ou empresa), o Hub espera cada vez
+  mais entre as tentativas (10 s, 20 s, 40 s... ate 3 min) em vez de
+  tentar sem parar. Se o tunel abrir e cair depois, volta em 10 s.
+- Atualize a pasta pc do PC (o 3DS nao muda).
+
+VERSAO 1.11.2
 - Acesso pela internet: o PC volta a publicar o endereco no ntfy.sh. Em
   alguns PCs o Windows guarda um certificado antigo e vencido, e o Hub
   recusava a conexao ("certificate has expired"). Agora o Hub usa a

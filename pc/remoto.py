@@ -42,6 +42,7 @@ NTFY = "https://ntfy.sh/"
 PORTA_PORTAO = 5011
 PORTAS_TCP = {5007, 5008, 5010, 5012}  # Câmera, Espelho, Ajustes, Steam
 PORTAS_UDP = {5005, 5006, 5013, 5014, 5015, 5016}  # Controle, Segunda Tela, Som, Bichinho, Pescaria, Karaokê
+ESPERA_TUNEL = (10, 180)             # reabrir o túnel: 10 s, dobrando a cada falha seguida, até 3 min
 REPUBLICAR_S = 3 * 3600               # o ntfy guarda as mensagens por 12 h
 GUID_WS = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11"   # fixo, do padrão WebSocket (RFC 6455)
 ALFABETO_CODIGO = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # sem 0/O e 1/I, que confundem
@@ -304,6 +305,7 @@ class Remoto:
             return False
 
     def _manter_tunel(self):
+        espera = ESPERA_TUNEL[0]
         while not self._parar.is_set():
             if not self._baixar_cloudflared():
                 self._parar.wait(60)
@@ -328,15 +330,21 @@ class Remoto:
                     self.status["url"] = m.group(0)
                     self.status["estado"] = "ligado"
                     print("Remoto: endereco", self.status["url"])
+                    espera = ESPERA_TUNEL[0]            # abriu: se cair, volta logo
                     self._publicado = time.monotonic() if self._publicar(self.status["url"]) else 0.0
                 if self._parar.is_set():
                     break
             self.processo.wait()
-            self.status["url"] = ""
+            abriu, self.status["url"] = bool(self.status["url"]), ""
             if not self._parar.is_set():
-                print("Remoto: o tunel caiu, abrindo de novo em 10 s")
+                # falha seguida (a rede pode estar bloqueando a Cloudflare): espera cada vez mais
+                if abriu:
+                    print(f"Remoto: o tunel caiu, abrindo de novo em {espera} s")
+                else:
+                    print(f"Remoto: o tunel nao abriu (a rede pode estar bloqueando), tentando de novo em {espera} s")
                 self.status["estado"] = "reconectando..."
-                self._parar.wait(10)
+                self._parar.wait(espera)
+                espera = min(espera * 2, ESPERA_TUNEL[1])
         self._tunel_rodando = False
 
     # ------------------------------------------------ portão (uma conexão por pedido do 3DS)
