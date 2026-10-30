@@ -18,7 +18,8 @@ Protocolo (TCP 5012, o 3DS pede e o PC responde):
     "T 400 240 k\\n" -> modo Blocos: "3DST" + u32 tamanho + u8 estado + u8 n + n números
                         de bloco (0 a 24, linha por linha) + JPEG do mosaico com esses
                         blocos, 5 por linha (k = 1: manda a tela inteira)
-    "Q\\n"           -> fecha o jogo (como clicar no X da janela; sem resposta)
+    "Q\\n"           -> fecha o jogo: pede para as janelas dele fecharem e, depois de 6 s,
+                        encerra à força o que sobrou da pasta do jogo (sem resposta)
 """
 
 import ctypes
@@ -280,6 +281,61 @@ def achar_janela(jogo, antes, desde, aberto_em):
     return None, False
 
 
+def processos_do_jogo(jogo, janela=None):
+    """Os programas do jogo: tudo que roda da pasta dele (e o que esses abriram), mais o
+    dono da janela capturada (jogos que abrem por um launcher de fora da pasta)."""
+    pasta = jogo["pasta"] + os.sep
+    achados = {}
+    for p in psutil.process_iter(["exe"]):
+        exe = p.info.get("exe") or ""
+        if exe and os.path.normcase(exe).startswith(pasta):
+            achados[p.pid] = p
+    if janela and win32gui.IsWindow(janela):
+        try:
+            _, pid = win32process.GetWindowThreadProcessId(janela)
+            p = psutil.Process(pid)
+            if p.name().lower() not in PROCESSOS_STEAM | PROCESSOS_SISTEMA:
+                achados[pid] = p
+        except Exception:
+            pass
+    for p in list(achados.values()):
+        try:
+            for filho in p.children(recursive=True):
+                if filho.name().lower() not in PROCESSOS_STEAM | PROCESSOS_SISTEMA:
+                    achados[filho.pid] = filho
+        except Exception:
+            pass
+    return list(achados.values())
+
+
+def fechar_jogo(jogo, janela=None, espera=6):
+    """Fecha o jogo no PC: pede para as janelas dele fecharem (o jogo pode salvar) e,
+    passados alguns segundos, encerra à força o que ainda estiver aberto."""
+    processos = processos_do_jogo(jogo, janela)
+    if not processos:
+        print(f"Steam: {jogo['nome']} já estava fechado")
+        return
+    pids = {p.pid for p in processos}
+
+    def pedir(hwnd, _):
+        try:
+            if win32process.GetWindowThreadProcessId(hwnd)[1] in pids:
+                win32api.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+        except Exception:
+            pass
+        return True
+
+    win32gui.EnumWindows(pedir, None)
+    _, vivos = psutil.wait_procs(processos, timeout=espera)
+    for p in vivos:
+        try:
+            p.kill()
+        except psutil.Error:
+            pass
+    psutil.wait_procs(vivos, timeout=3)
+    print(f"Steam: {jogo['nome']} fechado" + (f" ({len(vivos)} à força)" if vivos else ""))
+
+
 class TelaRapida:
     """Cópia da tela pelo Desktop Duplication: uns 10 ms em 1080p, contra 50 a 90 ms
     do GDI. Só no monitor principal; fora dele (ou sem o dxcam) usa a cópia comum."""
@@ -527,6 +583,7 @@ class Steam:
         antes, desde, achou_uma_vez, sumiu_em = set(), 0.0, False, None
         aberto_em, da_pasta, conferiu_em = 0.0, False, 0.0
         enviado = 0                         # número do último quadro mandado
+        pediu_fechar = False                # o 3DS mandou fechar: avisa assim que a janela sumir
         blocos = Blocos()
 
         def responder(magica, dados, extra=b""):
@@ -566,6 +623,7 @@ class Steam:
                     antes = {h for h, _ in janelas_visiveis()}
                     desde, aberto_em = time.monotonic(), time.time()
                     janela, achou_uma_vez, sumiu_em, enviado = None, False, None, 0
+                    pediu_fechar = False
                     # já aberto? usa a janela que existe (não abre outro)
                     janela = janela_da_pasta(jogo)
                     da_pasta = janela is not None
@@ -611,8 +669,10 @@ class Steam:
                         # a janela sumiu: pode ser só a tela de abertura trocando pela do
                         # jogo. Só diz que fechou depois de alguns segundos sem janela.
                         sumiu_em = sumiu_em or time.monotonic()
-                        if time.monotonic() - sumiu_em > 8:
+                        if pediu_fechar or time.monotonic() - sumiu_em > 8:
                             estado = 2
+                    elif pediu_fechar:
+                        estado = 2
                 cfg = self.config["steam"]
                 if cmd == "F":
                     if img is not None:
@@ -627,5 +687,8 @@ class Steam:
                     responder(b"3DST", dados, bytes([estado, len(lista)] + lista))
 
             elif cmd == "Q":
-                if janela and win32gui.IsWindow(janela):
-                    win32api.PostMessage(janela, win32con.WM_CLOSE, 0, 0)
+                # sem resposta (o 3DS não espera): fecha num canto, sem segurar os quadros
+                if jogo:
+                    pediu_fechar = True
+                    threading.Thread(target=fechar_jogo, args=(jogo, janela), daemon=True,
+                                     name="steam-fechar").start()

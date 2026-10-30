@@ -79,7 +79,8 @@ STEAM (SEUS JOGOS DO PC NO 3DS)
   * Som / Mudo: o som do PC tocando no 3DS (alto-falante ou fone). Chega
     com um pouco de atraso (uns 0,3 s) e tambem continua saindo no PC.
     Precisa do sdmc:/3ds/dspfirm.cdc, como o Sintetizador.
-  * Fechar: fecha o jogo no PC (toque duas vezes para confirmar).
+  * Fechar: fecha o jogo no PC (toque duas vezes para confirmar); se ele
+    nao fechar em 6 s, o Hub encerra a forca.
   * START+SELECT (ou Voltar): volta para a biblioteca; o jogo continua
     aberto no PC.
 - Deixe o jogo em janela ou "tela cheia sem bordas" (borderless). Em tela
@@ -136,7 +137,15 @@ LIGAR E SUSPENDER O PC PELO 3DS
   magico para ativar o computador". Se a aba "Avancado" tiver "Wake on
   Magic Packet" ou "WoWLAN", deixe ativado.
 
-O QUE MUDOU NESTA VERSAO (1.9.0)
+O QUE MUDOU NESTA VERSAO (1.9.1)
+- Steam: "Fechar" agora fecha o jogo no PC de verdade. O Hub pede para
+  todos os programas da pasta do jogo fecharem (o jogo pode salvar) e,
+  se depois de 6 s algum ainda estiver aberto, encerra a forca. Funciona
+  tambem com jogos que abrem por um launcher.
+- O 3DS volta para a biblioteca assim que o jogo fecha.
+- Atualize a pasta pc do PC (o 3DS nao muda).
+
+VERSAO 1.9.0
 - Ajustes > "Ligar o PC" e "Suspender o PC" (veja acima).
 - Atualize a pasta pc do PC.
 
