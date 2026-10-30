@@ -162,6 +162,9 @@ PADRAO = {
         # modo Blocos: quanto um bloco precisa mudar (diferença média, 0 a 255) para
         # ser reenviado. Maior = ignora fundos que mexem pouco (e manda menos).
         "limiar_blocos": 3,
+        # som do PC no 3DS: o Hub aumenta sozinho o som baixo, até este tanto de vezes
+        # (1 = como sai do PC). Um limitador suave evita estourar quando o som é alto.
+        "volume_som": 8.0,
     },
 }
 

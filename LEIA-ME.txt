@@ -123,7 +123,13 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.8.0)
+O QUE MUDOU NESTA VERSAO (1.8.1)
+- Steam: o som do PC chega bem mais alto no 3DS. O Hub do PC aumenta
+  sozinho o som baixo (ate 8x) e um limitador evita estourar. Para mudar
+  o maximo: "volume_som" na parte "steam" do config.json (1 = sem aumento).
+- Atualize a pasta pc do PC (o 3DS nao muda nada).
+
+VERSAO 1.8.0
 - Tres modulos novos: Bichinho, Pescaria e Karaoke (veja acima).
 - Bichinho aceita skins (imagens na pasta pc\bicho).
 - Atualize tambem a pasta pc do PC e rode o instalar.bat.

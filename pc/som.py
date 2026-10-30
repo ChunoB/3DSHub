@@ -9,6 +9,10 @@ Pacote: "3DSS" + u32 seq + s16 previsão + u8 índice + u8 0 + 256 bytes ADPCM.
 A previsão e o índice são o estado do compactador no começo do pacote, então cada
 pacote se decodifica sozinho (um pacote perdido no Wi-Fi não estraga os outros).
 Em cada byte, a primeira amostra fica nos 4 bits de cima (como no audioop).
+
+O alto-falante do 3DS é fraquinho, então o som passa por um ganho automático: som
+baixo (volume do Windows ou do jogo baixo) é aumentado até "volume_som" vezes, e um
+limitador suave segura os picos para não distorcer.
 """
 
 import ctypes
@@ -35,6 +39,25 @@ warnings.filterwarnings("ignore", message="data discontinuity")
 PORTA = 5013
 TAXA = 22050
 AMOSTRAS = 512                   # por pacote (23 ms)
+ALVO = 0.9                       # pico que o ganho automático procura
+
+
+class Ganho:
+    """Ganho automático: segue o pico do som (sobe na hora, desce em ~5 s) e aumenta
+    até o pico ficar perto de ALVO, sem passar de "maximo" vezes."""
+
+    def __init__(self):
+        self.pico, self.ganho = 0.0, 1.0
+
+    def aplicar(self, x, maximo):
+        maximo = max(1.0, float(maximo))
+        p = float(np.abs(x).max()) if len(x) else 0.0
+        self.pico = max(p, self.pico * 0.997)
+        alvo = min(maximo, ALVO / max(self.pico, 1e-4))
+        # baixa na hora (som alto chegando), sobe devagar (sem "bombear")
+        self.ganho = alvo if alvo < self.ganho else self.ganho + (alvo - self.ganho) * 0.05
+        y = np.clip(x * self.ganho, -1.5, 1.5)
+        return y - y ** 3 / 6.75     # limitador suave: chega em 1,0 sem quina
 
 
 class Som:
@@ -82,10 +105,12 @@ class Som:
                 alto = soundcard.default_speaker()
                 entrada = soundcard.get_microphone(id=str(alto.name), include_loopback=True)
                 with entrada.recorder(samplerate=TAXA, channels=1, blocksize=AMOSTRAS) as gravador:
-                    estado, seq = None, 0
+                    estado, seq, ganho = None, 0, Ganho()
                     while self._ativo():
                         bloco = gravador.record(numframes=AMOSTRAS)
-                        pcm = (np.clip(bloco[:, 0], -1, 1) * 32767).astype("<i2").tobytes()
+                        maximo = self.config.get("steam", {}).get("volume_som", 8.0)
+                        x = ganho.aplicar(bloco[:, 0], maximo)
+                        pcm = (np.clip(x, -1, 1) * 32767).astype("<i2").tobytes()
                         previsao, indice = estado or (0, 0)
                         with warnings.catch_warnings():
                             warnings.simplefilter("ignore", DeprecationWarning)
