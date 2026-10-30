@@ -2,6 +2,7 @@
 
 import ctypes
 import socket
+import ssl
 import time
 
 from pynput.keyboard import Controller as Teclado, Key, KeyCode
@@ -9,6 +10,19 @@ from pynput.mouse import Button, Controller as Mouse
 
 teclado = Teclado()
 mouse = Mouse()
+
+
+def _contexto_ssl():
+    """Certificados para HTTPS. Usa a lista do certifi quando dá: a do Windows pode ter
+    certificados vencidos (ex.: um ISRG Root X2 antigo) que fazem o Python recusar sites bons."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        return ssl.create_default_context()
+
+
+SSL = _contexto_ssl()
 
 ESPECIAIS = {
     "space": Key.space, "espaco": Key.space,

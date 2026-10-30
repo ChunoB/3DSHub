@@ -42,7 +42,7 @@ import win32process
 from PIL import Image, ImageDraw, ImageGrab
 
 from espelho import capturar, texto
-from util import trazer_para_frente
+from util import SSL, trazer_para_frente
 
 try:
     import dxcam                 # captura rápida (Desktop Duplication)
@@ -185,7 +185,7 @@ def arquivo_capa(appid):
     for url in (f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg",
                 f"https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"):
         try:
-            with urllib.request.urlopen(url, timeout=6) as r:
+            with urllib.request.urlopen(url, timeout=6, context=SSL) as r:
                 dados = r.read()
             with open(local, "wb") as f:
                 f.write(dados)

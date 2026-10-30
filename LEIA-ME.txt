@@ -137,7 +137,17 @@ LIGAR E SUSPENDER O PC PELO 3DS
   magico para ativar o computador". Se a aba "Avancado" tiver "Wake on
   Magic Packet" ou "WoWLAN", deixe ativado.
 
-O QUE MUDOU NESTA VERSAO (1.11.1)
+O QUE MUDOU NESTA VERSAO (1.11.2)
+- Acesso pela internet: o PC volta a publicar o endereco no ntfy.sh. Em
+  alguns PCs o Windows guarda um certificado antigo e vencido, e o Hub
+  recusava a conexao ("certificate has expired"). Agora o Hub usa a
+  lista de certificados do certifi (vale tambem para as letras do
+  Karaoke e as capas da Steam).
+- Quando a rede bloqueia o tunel da Cloudflare, o Hub nao publica mais
+  um endereco errado (api.trycloudflare.com) para o 3DS.
+- Atualize a pasta pc do PC (o 3DS nao muda).
+
+VERSAO 1.11.1
 - New 3DS: o app usa o processador mais rapido (804 MHz) e o cache extra
   do New (no Old nada muda). ZL, ZR e C-stick ja funcionavam no Controle
   e na Steam.

@@ -38,6 +38,7 @@ except Exception:                         # sem som: a letra funciona, a nota nÃ
     soundcard = None
 
 from tela import texto
+from util import SSL
 
 warnings.filterwarnings("ignore", message="data discontinuity")
 
@@ -65,7 +66,7 @@ def buscar_letra(titulo, artista, duracao_s):
         try:
             url = "https://lrclib.net/api/search?" + urllib.parse.urlencode(params)
             req = urllib.request.Request(url, headers={"User-Agent": "3DSHub (github.com/ChunoB/3DSHub)"})
-            with urllib.request.urlopen(req, timeout=8) as r:
+            with urllib.request.urlopen(req, timeout=8, context=SSL) as r:
                 resultados = json.load(r)
         except Exception as e:
             print("KaraokÃª: erro ao buscar a letra", repr(e))

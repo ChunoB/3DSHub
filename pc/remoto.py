@@ -33,6 +33,7 @@ import time
 import urllib.request
 
 from config import PASTA
+from util import SSL
 
 ARQUIVO = os.path.join(PASTA, "remoto.json")
 CLOUDFLARED = os.path.join(PASTA, "cloudflared.exe")
@@ -199,7 +200,7 @@ class Remoto:
             req = urllib.request.Request(NTFY + self.dados["topico_senha"],
                                          data=f"3DSPAR1 {self.dados['token']} {self.dados['topico']} {nome}".encode(),
                                          headers={"User-Agent": "3DSHub", "Cache": "yes"}, method="POST")
-            urllib.request.urlopen(req, timeout=20).read()
+            urllib.request.urlopen(req, timeout=20, context=SSL).read()
             self._senha_publicada = time.monotonic()
             return True
         except Exception as e:
@@ -218,7 +219,7 @@ class Remoto:
             req = urllib.request.Request(NTFY + topico_do_codigo(codigo),
                                          data=f"3DSPAR1 {token} {topico} {nome}".encode(),
                                          headers={"User-Agent": "3DSHub", "Cache": "yes"}, method="POST")
-            urllib.request.urlopen(req, timeout=20).read()
+            urllib.request.urlopen(req, timeout=20, context=SSL).read()
         except Exception as e:
             print("Remoto: nao consegui publicar o codigo de pareamento:", e)
             return None
@@ -278,7 +279,7 @@ class Remoto:
         try:
             temp = CLOUDFLARED + ".baixando"
             req = urllib.request.Request(URL_CLOUDFLARED, headers={"User-Agent": "3DSHub"})
-            with urllib.request.urlopen(req, timeout=120) as r, open(temp, "wb") as f:
+            with urllib.request.urlopen(req, timeout=120, context=SSL) as r, open(temp, "wb") as f:
                 while True:
                     bloco = r.read(1 << 16)
                     if not bloco:
@@ -296,7 +297,7 @@ class Remoto:
         try:
             req = urllib.request.Request(NTFY + self.dados["topico"], data=url.encode(),
                                          headers={"User-Agent": "3DSHub", "Cache": "yes"}, method="POST")
-            urllib.request.urlopen(req, timeout=20).read()
+            urllib.request.urlopen(req, timeout=20, context=SSL).read()
             return True
         except Exception as e:
             print("Remoto: nao consegui publicar o endereco:", e)
@@ -322,7 +323,7 @@ class Remoto:
             for linha in self.processo.stderr:
                 if os.environ.get("HUB_DEBUG"):
                     print("cloudflared:", linha.rstrip())
-                m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", linha)
+                m = re.search(r"https://(?!api\.)[a-z0-9-]+\.trycloudflare\.com", linha)
                 if m and m.group(0) != self.status["url"]:
                     self.status["url"] = m.group(0)
                     self.status["estado"] = "ligado"

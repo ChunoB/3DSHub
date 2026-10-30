@@ -12,3 +12,4 @@ dxcam
 numpy
 soundcard
 audioop-lts; python_version >= "3.13"
+certifi
