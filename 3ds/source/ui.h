@@ -34,6 +34,12 @@
 #define COR_AZUL_CL    HEX(0x85B7EB)
 #define COR_STEAM      HEX(0x5C8A1E)   // Steam (o verde do botão Jogar)
 #define COR_STEAM_CL   HEX(0xA4D007)
+#define COR_BICHO      HEX(0xC77A2E)   // Bichinho (laranja-caramelo)
+#define COR_BICHO_CL   HEX(0xF2B872)
+#define COR_KARAOKE    HEX(0xB0399E)   // Karaokê (magenta)
+#define COR_KARAOKE_CL HEX(0xE88BD8)
+#define COR_PESCA      HEX(0x1F7FA6)   // Pescaria (azul do mar)
+#define COR_PESCA_CL   HEX(0x7FD3EE)
 #define COR_VERDE      HEX(0x97C459)
 #define COR_AMARELO    HEX(0xEF9F27)
 #define COR_VERMELHO   HEX(0xE24B4A)
@@ -71,6 +77,7 @@ enum {
     IC_PLAY, IC_PAUSE, IC_PROXIMA, IC_ANTERIOR, IC_VOL_MAIS, IC_VOL_MENOS, IC_MUDO,
     IC_MUSICA, IC_PC, IC_OK, IC_X, IC_SETA_BAIXO, IC_SETA_CIMA, IC_LUPA, IC_LED,
     IC_RAIO, IC_LISTA, IC_TELA_CHEIA, IC_GIRO, IC_TECLADO,
+    IC_BICHO, IC_MICROFONE, IC_PEIXE,
 };
 // corFundo = cor por trás do ícone (usada para "recortar" detalhes)
 void uiIcone(int icone, float cx, float cy, float tamanho, u32 cor, u32 corFundo);
@@ -106,6 +113,8 @@ typedef struct {
 } UiImagem;
 
 bool uiImagemCriar(UiImagem *im, int w, int h);
+// Igual, mas com transparência: pixels RGBA4444 (R nos 4 bits de cima, A nos de baixo).
+bool uiImagemCriarAlfa(UiImagem *im, int w, int h);
 void uiImagemEnviar(UiImagem *im);
 void uiImagemDesenhar(UiImagem *im, float x, float y);
 void uiImagemDesenharEscala(UiImagem *im, float x, float y, float escala);

@@ -327,6 +327,28 @@ void uiIcone(int icone, float cx, float cy, float tamanho, u32 cor, u32 fundo) {
                 uiRet(cx + (-8.5f + c * 4) * u, cy + (-4.5f + l * 4) * u, 2.4f * u, 2.4f * u, fundo);
         uiRet(cx - 5 * u, cy + 3.5f * u, 10 * u, 2 * u, fundo);
         break;
+    case IC_BICHO:                       // bolinha com orelhas e olhos
+        uiCirculo(cx, cy + 2 * u, 9 * u, cor);
+        uiTri(P(-8, -3), P(-6, -11), P(-2, -6), cor);
+        uiTri(P(8, -3), P(6, -11), P(2, -6), cor);
+        uiCirculo(cx - 3.5f * u, cy + 1 * u, 1.8f * u, fundo);
+        uiCirculo(cx + 3.5f * u, cy + 1 * u, 1.8f * u, fundo);
+        uiRet(cx - 2 * u, cy + 5 * u, 4 * u, 1.4f * u, fundo);
+        break;
+    case IC_MICROFONE:
+        uiRetArred(cx - 4 * u, cy - 11 * u, 8 * u, 13 * u, 4 * u, cor);
+        uiAnel(cx, cy - 1 * u, 7 * u, 1.8f * u, cor, fundo);
+        uiRet(cx - 8 * u, cy - 9 * u, 16 * u, 8 * u, fundo);          // tira a parte de cima do arco
+        uiRetArred(cx - 4 * u, cy - 11 * u, 8 * u, 13 * u, 4 * u, cor);
+        uiRet(cx - 1 * u, cy + 6 * u, 2 * u, 4 * u, cor);
+        uiRetArred(cx - 5 * u, cy + 9 * u, 10 * u, 2 * u, u, cor);
+        break;
+    case IC_PEIXE:
+        uiCirculo(cx - 2 * u, cy, 7 * u, cor);
+        uiQuad(cx - 2 * u, cy, 13 * u, 9 * u, 0, cor);
+        uiTri(P(4, 0), P(11, -7), P(11, 7), cor);                        // rabo
+        uiCirculo(cx - 5 * u, cy - 1.5f * u, 1.6f * u, fundo);           // olho
+        break;
     }
     #undef P
 }
@@ -418,9 +440,14 @@ static inline u32 ordemZ(u32 x, u32 y) {          // x, y de 0 a 7 dentro do blo
     return (x & 1) | ((y & 1) << 1) | ((x & 2) << 1) | ((y & 2) << 2) | ((x & 4) << 2) | ((y & 4) << 3);
 }
 
-bool uiImagemCriar(UiImagem *im, int w, int h) {
+static bool criarImagem(UiImagem *im, int w, int h, GPU_TEXCOLOR formato);
+
+bool uiImagemCriar(UiImagem *im, int w, int h) { return criarImagem(im, w, h, GPU_RGB565); }
+bool uiImagemCriarAlfa(UiImagem *im, int w, int h) { return criarImagem(im, w, h, GPU_RGBA4); }
+
+static bool criarImagem(UiImagem *im, int w, int h, GPU_TEXCOLOR formato) {
     memset(im, 0, sizeof(*im));
-    if (!C3D_TexInit(&im->tex, UI_IMG_LARG, UI_IMG_ALT, GPU_RGB565)) return false;
+    if (!C3D_TexInit(&im->tex, UI_IMG_LARG, UI_IMG_ALT, formato)) return false;
     C3D_TexSetFilter(&im->tex, GPU_LINEAR, GPU_LINEAR);
     im->pixels = linearAlloc(UI_IMG_LARG * UI_IMG_ALT * sizeof(u16));
     if (!im->pixels) {

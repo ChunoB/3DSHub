@@ -47,6 +47,15 @@ static const Item itens[] = {
     { "Steam", "Seus jogos do PC aqui",
       "A biblioteca da Steam do PC. Escolha um jogo:\nele abre no PC e aparece na tela de cima,\ncom os botões do 3DS como controle.",
       IC_PLAY, COR_STEAM, COR_STEAM_CL, modSteam, true },
+    { "Bichinho", "Mora no 3DS, sente o PC",
+      "Um bichinho que dança com a música do PC, sua\ncom a CPU quente e dorme com o PC parado.\nDê comida e faça carinho com a caneta.",
+      IC_BICHO, COR_BICHO, COR_BICHO_CL, modBicho, false },
+    { "Pescaria", "Peixes na TV, vara no 3DS",
+      "Os peixes nadam no monitor do PC. Mire com o\ncircle pad, balance o 3DS para lançar e gire a\ncaneta para puxar. Dá para jogar em vários.",
+      IC_PEIXE, COR_PESCA, COR_PESCA_CL, modPescaria, true },
+    { "Karaokê", "Cante com a música do PC",
+      "Toque uma música no PC (Spotify, YouTube...):\na letra rola aqui e o PC dá nota para a sua\nafinação no microfone do 3DS.",
+      IC_MICROFONE, COR_KARAOKE, COR_KARAOKE_CL, modKaraoke, true },
     { "Ajustes", "PC, atualização e giroscópio",
       "Procurar o PC, atualizar o app pelo Wi-Fi e\najustar o giroscópio e o touchpad.",
       IC_ENGRENAGEM, COR_CARTAO2, COR_TEXTO2, modAjustes, false },
@@ -56,9 +65,9 @@ static const Item itens[] = {
 
 // grade de 2 colunas na tela de baixo; sobrando um no fim (Ajustes), ele ocupa a linha toda
 #define TILE_W 145
-#define TILE_H 52
+#define TILE_H 40
 static float tileX(int i) { return 10 + (i % 2) * (TILE_W + 10); }
-static float tileY(int i) { return 8 + (i / 2) * (TILE_H + 6); }
+static float tileY(int i) { return 8 + (i / 2) * (TILE_H + 5); }
 static float tileW(int i) { return i == N_ITENS - 1 && N_ITENS % 2 ? 2 * TILE_W + 10 : TILE_W; }
 
 // ---------------------------------------------------------------- sonda do Hub

@@ -13,6 +13,9 @@ ESTRUTURA
   3ds\source\camera.c     camera do 3DS -> PC (OBS)
   3ds\source\espelho.c    janela do PC -> tela de cima (zoom e aba Clicar)
   3ds\source\steam.c      biblioteca da Steam do PC; o jogo na tela de cima + controle
+  3ds\source\bicho.c      Bichinho (pixel art, comida, carinho, skins do PC)
+  3ds\source\pescaria.c   Pescaria (vara: mira, lancamento por giroscopio, molinete)
+  3ds\source\karaoke.c    Karaoke (microfone, nota por YIN, letra sincronizada)
   3ds\source\som.c/.h     som do PC tocando no 3DS (IMA ADPCM -> NDSP), usado pela Steam
   3ds\source\ajustes.c    procurar PC, IP, atualizar o app, acesso pela internet, giroscopio/touchpad
   3ds\source\tunel.c      acesso pela internet: HTTPS + WebSocket ate o portao do PC
@@ -34,6 +37,9 @@ ESTRUTURA
                           (cloudflared + endereco publicado no ntfy.sh)
   pc\steam.py             porta 5012 (TCP) - jogos da Steam, capas, abrir o jogo e a imagem dele
                           (os botoes vao pelo Controle, porta 5005)
+  pc\bicho.py             porta 5014 (UDP) - o que o PC esta fazendo + skin do Bichinho
+  pc\pesca.py             porta 5015 (UDP) - o jogo da Pescaria e a janela do lago (tkinter)
+  pc\karaoke.py           porta 5016 (UDP) - musica tocando, letra (lrclib.net) e nota
   pc\som.py               porta 5013 (UDP) - o som do PC (loopback) compactado para o 3DS
   pc\util.py              teclado/mouse, cliques, IPs do PC
 

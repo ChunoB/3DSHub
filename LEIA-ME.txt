@@ -89,6 +89,32 @@ STEAM (SEUS JOGOS DO PC NO 3DS)
   turnos, plataforma simples) ficam bem; tiro e luta ainda sentem o atraso.
 - Precisa da pasta pc da versao 1.6.0 no PC (rode o instalar.bat).
 
+BICHINHO
+- Um bichinho em pixel art que mora no 3DS e sente o PC: danca com a
+  musica do PC, sua com a CPU alta, dorme com o PC parado (ou de
+  madrugada) e fica bravo com muitas janelas abertas.
+- Tela de baixo: esfregue a caneta no rosto dele = carinho; arraste uma
+  comida da bandeja ate a boca = comer. Fome e alegria baixam com o tempo,
+  ate com o app fechado.
+- Skin (opcional): coloque imagens na pasta pc\bicho do PC com o nome do
+  estado: normal_*, danca_*, dorme_*, bravo_*, calor_*, feliz_* (PNG com
+  fundo transparente ou GIF animado; varios arquivos = quadros da
+  animacao). O 3DS baixa sozinho e guarda no SD.
+
+PESCARIA
+- Abra no 3DS: o lago abre numa janela no PC (F11 = tela cheia, bom na TV).
+  Cada 3DS que abrir a Pescaria vira um pescador de uma cor (ate 4).
+- Mire com o circle pad, balance o 3DS (ou segure A e solte) para lancar.
+  Quando a boia afundar e aparecer FISGOU, gire a caneta no molinete da
+  tela de baixo. Girar puxa o peixe mas estica a linha: linha a 100%
+  arrebenta, parar muito deixa o peixe fugir. B recolhe a linha.
+
+KARAOKE
+- Toque uma musica no PC (Spotify, YouTube no navegador...): a letra
+  sincronizada aparece no 3DS (vem do lrclib.net, precisa de internet).
+- Cante no microfone do 3DS: o circulo mostra a nota da musica (rosa) e a
+  sua (amarela). Oitava nao importa. A nota sobe quando voce acerta.
+
 ATUALIZAR SEM TIRAR O CARTAO
 - Pela internet: ao abrir, o 3DS Hub procura versao nova no GitHub
   sozinho e pergunta "Atualizar agora?". Na mao: Ajustes > Atualizar
@@ -97,7 +123,12 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.7.0)
+O QUE MUDOU NESTA VERSAO (1.8.0)
+- Tres modulos novos: Bichinho, Pescaria e Karaoke (veja acima).
+- Bichinho aceita skins (imagens na pasta pc\bicho).
+- Atualize tambem a pasta pc do PC e rode o instalar.bat.
+
+VERSAO 1.7.0
 - Steam com som: o audio do PC toca no 3DS (botao Som / Mudo).
 - Steam, modo Blocos: imagem nitida mandando so os pedacos que mudaram.
 - Atualize tambem a pasta pc do PC e rode o instalar.bat (bibliotecas novas

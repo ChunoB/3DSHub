@@ -46,6 +46,9 @@ from ajustes import Ajustes                      # noqa: E402
 from remoto import Remoto                        # noqa: E402
 from steam import Steam                          # noqa: E402
 from som import Som                              # noqa: E402
+from bicho import Bicho                          # noqa: E402
+from pesca import Pescaria                       # noqa: E402
+from karaoke import Karaoke                      # noqa: E402
 
 try:
     from controle import Controle                # noqa: E402
@@ -112,7 +115,8 @@ def main():
 
     classes = {"Controle": Controle, "Segunda Tela": SegundaTela, "Camera": Camera, "Espelho": Espelho,
                "Descoberta": Descoberta, "Ajustes": Ajustes, "Remoto": Remoto, "Steam": Steam,
-               "Som": Som}
+               "Som": Som, "Bichinho": Bicho, "Pescaria": Pescaria,
+               "Karaoke": Karaoke}
     servicos, erros = {}, []
     for nome, classe in classes.items():
         servicos[nome] = Falhou()

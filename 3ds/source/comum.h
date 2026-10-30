@@ -75,6 +75,9 @@ typedef struct __attribute__((packed)) {
 // Módulos
 void modControle(void);
 void modSteam(void);
+void modBicho(void);
+void modPescaria(void);
+void modKaraoke(void);
 void modTela(void);
 void modSintetizador(void);
 void modCamera(void);
