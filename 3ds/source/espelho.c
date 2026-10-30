@@ -4,7 +4,8 @@
 //   R / L (segurar)         : aproximar / afastar (até 8x)
 //   circle pad, cruz ou arrastar o dedo (aba Mover): mover a parte visível
 //   aba Clicar (ou X)       : o toque vira mouse no PC (toque, segurar, arrastar,
-//                             faixa de rolagem); SELECT ou Teclado: digitar no PC
+//                             faixa de rolagem); SELECT ou Teclado: teclado na tela
+//                             (cada tecla vai na hora para o PC; B fecha)
 //   Y                       : voltar para a janela inteira
 //   B                       : voltar para a lista
 //   X (na lista)            : atualizar a lista
@@ -156,6 +157,8 @@ static void controlarZoom(u32 down, u32 held, float dt, bool arrastar) {
 #define ROLAR_PX    8       // pixels de arrasto por "dente" da rodinha
 
 static bool modoClique, mostrandoJanela, direitoArmado;
+static bool tecladoAberto;          // teclado em tempo real na tela de baixo (aba Clicar)
+static void tecladoEntrada(u32 down, u32 held, touchPosition tp);
 static u32 downGuardado;            // botões apertados entre uma leitura e outra do laço
 static touchPosition toqueDown;     // onde o dedo encostou da última vez
 static int ultU = 5000, ultV = 5000;   // último ponto apontado (a rodinha gira ali)
@@ -211,6 +214,11 @@ static void amostrarEntrada(void) {
         g.ativo = g.rolando = false;
         return;
     }
+    if (tecladoAberto) {
+        g.ativo = g.rolando = false;
+        tecladoEntrada(down, held, tp);
+        return;
+    }
     u64 agora = osGetTime();
     if ((down & KEY_TOUCH) && (naMini(tp.px, tp.py) || naFaixa(tp.px, tp.py))) {
         memset(&g, 0, sizeof(g));
@@ -254,21 +262,211 @@ static void amostrarEntrada(void) {
     }
 }
 
-// Teclado do 3DS: o texto vai para a janela do PC ("K" + texto em hex).
-static bool digitar(int sock) {
-    static char texto[256];
-    SwkbdState kb;
-    swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, sizeof(texto) - 1);
-    swkbdSetHintText(&kb, "Texto para digitar no PC");
-    swkbdSetButton(&kb, SWKBD_BUTTON_LEFT, "Cancelar", false);
-    swkbdSetButton(&kb, SWKBD_BUTTON_RIGHT, "Digitar", true);
-    texto[0] = 0;
-    if (swkbdInputText(&kb, texto, sizeof(texto)) != SWKBD_BUTTON_RIGHT || !texto[0]) return true;
-    static char cmd[2 * sizeof(texto) + 8];
-    int k = snprintf(cmd, sizeof(cmd), "K ");
-    for (const u8 *p = (const u8 *)texto; *p && k < (int)sizeof(cmd) - 4; p++) k += sprintf(cmd + k, "%02x", *p);
-    cmd[k++] = '\n';
-    return enviarTudo(sock, cmd, k, 3000);
+// ---------------------------------------------------------------- teclado em tempo real
+// Um teclado desenhado na tela de baixo: cada tecla vai para o PC na hora ("K" + o
+// caractere em hex, ou "E enter" etc.). Os acentos são "mortos", como no PC: ´ e
+// depois a = á. Shift vale para uma letra. Segurar Apagar repete.
+
+enum { TK_TEXTO, TK_SHIFT, TK_APAGAR, TK_ENTER, TK_ESPACO, TK_AGUDO, TK_TIL, TK_CAMADA, TK_FECHAR, TK_TAB };
+typedef struct { float x, y, w; const char *txt; int acao; } Tecla;
+
+#define TK_Y0    44
+#define TK_H     34
+#define TK_PASSO 37
+#define TK_REPETIR_MS 450   // segurar Apagar: começa a repetir depois disso
+#define TK_RITMO_MS   70
+
+static const char *const NUMEROS[10] = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" };
+static const char *const LETRAS[3][10] = {
+    { "q", "w", "e", "r", "t", "y", "u", "i", "o", "p" },
+    { "a", "s", "d", "f", "g", "h", "j", "k", "l", "ç" },
+    { "z", "x", "c", "v", "b", "n", "m" },
+};
+static const char *const SIMBOLOS[3][10] = {
+    { "-", "_", "/", ":", ";", "(", ")", "$", "&", "@" },
+    { "!", "?", ",", ".", "'", "\"", "#", "%", "+", "=" },
+    { "*", "<", ">", "[", "]", "\\", "|" },
+};
+
+static Tecla teclas[48];
+static int nTeclas, camada, teclaVisivel = -1, teclaSegurada = -1;
+static bool shiftLigado;
+static char acento;                 // acento morto esperando a letra: 0, '\'', '`', '~' ou '^'
+static u64 teclaVisivelAte, proximaRepeticao;
+
+typedef struct { char tipo; char txt[12]; } Envio;   // 'K' texto, 'E' tecla especial
+static Envio envios[32];
+static int nEnvios;
+
+static void pedirEnvio(char tipo, const char *txt) {
+    if (nEnvios < 32) {
+        envios[nEnvios].tipo = tipo;
+        snprintf(envios[nEnvios].txt, sizeof(envios[0].txt), "%s", txt);
+        nEnvios++;
+    }
+}
+
+static void addTecla(float x, int linha, float w, const char *txt, int acao) {
+    teclas[nTeclas++] = (Tecla){ x, TK_Y0 + linha * TK_PASSO, w, txt, acao };
+}
+
+static void montarTeclas(void) {
+    nTeclas = 0;
+    const char *const (*l)[10] = camada ? SIMBOLOS : LETRAS;
+    for (int i = 0; i < 10; i++) addTecla(1 + i * 32, 0, 30, NUMEROS[i], TK_TEXTO);
+    for (int i = 0; i < 10; i++) addTecla(1 + i * 32, 1, 30, l[0][i], TK_TEXTO);
+    for (int i = 0; i < 10; i++) addTecla(1 + i * 32, 2, 30, l[1][i], TK_TEXTO);
+    addTecla(1, 3, 46, camada ? "Tab" : "Shift", camada ? TK_TAB : TK_SHIFT);
+    for (int i = 0; i < 7; i++) addTecla(49 + i * 32, 3, 30, l[2][i], TK_TEXTO);
+    addTecla(273, 3, 46, "Apagar", TK_APAGAR);
+    addTecla(1, 4, 48, "Fechar", TK_FECHAR);
+    addTecla(51, 4, 28, "á à", TK_AGUDO);
+    addTecla(81, 4, 28, "ã â", TK_TIL);
+    addTecla(111, 4, 108, "espaço", TK_ESPACO);
+    addTecla(221, 4, 44, camada ? "abc" : "?123", TK_CAMADA);
+    addTecla(267, 4, 52, "Enter", TK_ENTER);
+}
+
+// "a" -> "A", "ç" -> "Ç" (o resto fica igual)
+static const char *maiuscula(const char *s) {
+    static char saida[8];
+    if (!strcmp(s, "ç")) return "Ç";
+    if (s[0] >= 'a' && s[0] <= 'z' && !s[1]) {
+        saida[0] = s[0] - 32;
+        saida[1] = 0;
+        return saida;
+    }
+    return s;
+}
+
+// Junta o acento morto com a letra: ´ + a = á. Sem combinação, manda os dois.
+static void mandarComAcento(const char *letra) {
+    static const struct { char acento; const char *de, *para; } tabela[] = {
+        { '\'', "a", "á" }, { '\'', "e", "é" }, { '\'', "i", "í" }, { '\'', "o", "ó" }, { '\'', "u", "ú" },
+        { '\'', "A", "Á" }, { '\'', "E", "É" }, { '\'', "I", "Í" }, { '\'', "O", "Ó" }, { '\'', "U", "Ú" },
+        { '`', "a", "à" }, { '`', "A", "À" },
+        { '~', "a", "ã" }, { '~', "o", "õ" }, { '~', "n", "ñ" }, { '~', "A", "Ã" }, { '~', "O", "Õ" },
+        { '^', "a", "â" }, { '^', "e", "ê" }, { '^', "o", "ô" }, { '^', "A", "Â" }, { '^', "E", "Ê" }, { '^', "O", "Ô" },
+    };
+    if (acento) {
+        for (size_t i = 0; i < sizeof(tabela) / sizeof(tabela[0]); i++)
+            if (tabela[i].acento == acento && !strcmp(tabela[i].de, letra)) {
+                pedirEnvio('K', tabela[i].para);
+                acento = 0;
+                return;
+            }
+        pedirEnvio('K', acento == '\'' ? "´" : acento == '`' ? "`" : acento == '~' ? "~" : "^");
+        acento = 0;
+    }
+    pedirEnvio('K', letra);
+}
+
+static void apertarTecla(int i) {
+    Tecla *t = &teclas[i];
+    teclaVisivel = i;
+    teclaVisivelAte = osGetTime() + 150;
+    switch (t->acao) {
+    case TK_TEXTO:
+        mandarComAcento(shiftLigado ? maiuscula(t->txt) : t->txt);
+        shiftLigado = false;
+        break;
+    case TK_ESPACO:
+        mandarComAcento(" ");
+        break;
+    case TK_AGUDO:
+    case TK_TIL: {
+        char novo = t->acao == TK_AGUDO ? (shiftLigado ? '`' : '\'') : (shiftLigado ? '^' : '~');
+        shiftLigado = false;
+        if (acento) mandarComAcento("");          // dois acentos seguidos: manda o primeiro
+        acento = novo;
+        break;
+    }
+    case TK_SHIFT:  shiftLigado = !shiftLigado; break;
+    case TK_APAGAR:
+        if (acento) acento = 0;                     // apaga o acento que ainda não foi
+        else pedirEnvio('E', "backspace");
+        break;
+    case TK_ENTER:  pedirEnvio('E', "enter"); break;
+    case TK_TAB:    pedirEnvio('E', "tab"); break;
+    case TK_CAMADA: camada = !camada; montarTeclas(); break;
+    case TK_FECHAR: tecladoAberto = false; break;
+    }
+}
+
+static int teclaEm(int x, int y) {
+    for (int i = 0; i < nTeclas; i++)
+        if (x >= teclas[i].x && x < teclas[i].x + teclas[i].w && y >= teclas[i].y && y < teclas[i].y + TK_H)
+            return i;
+    return -1;
+}
+
+static void tecladoEntrada(u32 down, u32 held, touchPosition tp) {
+    u64 agora = osGetTime();
+    if (down & KEY_TOUCH) {
+        int i = teclaEm(tp.px, tp.py);
+        teclaSegurada = i;
+        if (i >= 0) {
+            apertarTecla(i);
+            proximaRepeticao = agora + TK_REPETIR_MS;
+        }
+        return;
+    }
+    if (!(held & KEY_TOUCH)) {
+        teclaSegurada = -1;
+        return;
+    }
+    // segurar Apagar repete (e só se o dedo continuar em cima dela)
+    if (teclaSegurada >= 0 && teclas[teclaSegurada].acao == TK_APAGAR && agora >= proximaRepeticao &&
+        teclaEm(tp.px, tp.py) == teclaSegurada) {
+        apertarTecla(teclaSegurada);
+        proximaRepeticao = agora + TK_RITMO_MS;
+    }
+}
+
+static void abrirTecladoNaTela(void) {
+    tecladoAberto = true;
+    shiftLigado = false;
+    acento = 0;
+    camada = 0;
+    teclaSegurada = teclaVisivel = -1;
+    montarTeclas();
+}
+
+static void desenharTeclado(void) {
+    for (int i = 0; i < nTeclas; i++) {
+        const Tecla *t = &teclas[i];
+        bool ligado = (t->acao == TK_SHIFT && shiftLigado) ||
+                      (t->acao == TK_AGUDO && (acento == '\'' || acento == '`')) ||
+                      (t->acao == TK_TIL && (acento == '~' || acento == '^')) ||
+                      (i == teclaVisivel && osGetTime() < teclaVisivelAte);
+        u32 fundo = ligado ? COR_AZUL : t->acao == TK_TEXTO ? COR_CARTAO2 : COR_CARTAO;
+        uiRetArred(t->x, t->y, t->w, TK_H, 7, fundo);
+        const char *txt = t->acao == TK_TEXTO && shiftLigado ? maiuscula(t->txt) : t->txt;
+        float tam = t->acao == TK_TEXTO ? 15 : 11;
+        uiTexto(t->x + t->w / 2, t->y + TK_H / 2 - tam / 2 - 1, tam, ligado ? COR_BRANCO : COR_TEXTO, CENTRO, t->w - 2, "%s", txt);
+    }
+}
+
+// Manda o que o teclado juntou. false = a conexão caiu.
+static bool mandarTeclas(int sock) {
+    Envio copia[32];
+    int n = nEnvios;
+    memcpy(copia, envios, sizeof(Envio) * n);
+    nEnvios = 0;
+    for (int i = 0; i < n; i++) {
+        char cmd[48];
+        int k;
+        if (copia[i].tipo == 'E') {
+            k = snprintf(cmd, sizeof(cmd), "E %s\n", copia[i].txt);
+        } else {
+            if (!copia[i].txt[0]) continue;
+            k = snprintf(cmd, sizeof(cmd), "K ");
+            for (const u8 *p = (const u8 *)copia[i].txt; *p; p++) k += snprintf(cmd + k, sizeof(cmd) - k, "%02x", *p);
+            cmd[k++] = '\n';
+        }
+        if (!enviarTudo(sock, cmd, k, 3000)) return false;
+    }
+    return true;
 }
 
 // ---------------------------------------------------------------- desenho
@@ -344,6 +542,10 @@ static void desenharEspelho(UiImagem *im, bool temImagem, const char *janela, fl
     uiRetArred(165, ABA_Y, 145, ABA_H, 9, modoClique ? COR_AZUL : COR_CARTAO);
     uiTexto(237, ABA_Y + 8, 14, modoClique ? COR_BRANCO : COR_MUDO, CENTRO, 0, "Clicar");
 
+    if (modoClique && tecladoAberto) {
+        desenharTeclado();
+        return;
+    }
     if (modoClique) {
         uiRet(MINI_X, MINI_Y, MINI_W, MINI_H, COR_CARTAO);
         if (temImagem) uiImagemDesenharEscala(im, MINI_X, MINI_Y, MINI_ESC);
@@ -426,7 +628,8 @@ void modEspelho(void) {
     float fps = 0;
     bool saiu = false, caiu = false;
 
-    modoClique = mostrandoJanela = direitoArmado = false;
+    modoClique = mostrandoJanela = direitoArmado = tecladoAberto = false;
+    nEnvios = 0;
     downGuardado = 0;
     nFila = 0;
     memset(&g, 0, sizeof(g));
@@ -480,13 +683,23 @@ void modEspelho(void) {
         }
 
         // abas e botões da tela de baixo
-        bool voltar = down & KEY_B, abrirTeclado = modoClique && (down & KEY_SELECT);
+        bool voltar = down & KEY_B, abrirTeclado = false;
         const char *tecla = NULL;
+        if (modoClique && (down & KEY_SELECT)) {          // SELECT abre e fecha o teclado
+            if (tecladoAberto) tecladoAberto = false;
+            else abrirTeclado = true;
+        }
+        if (tecladoAberto && voltar) {                    // B com o teclado aberto: só fecha ele
+            tecladoAberto = false;
+            voltar = false;
+        }
         if (down & KEY_X) modoClique = !modoClique;
         if (down & KEY_TOUCH) {
             if (uiDentro(&tp, 10, ABA_Y, 145, ABA_H))  modoClique = false;
             if (uiDentro(&tp, 165, ABA_Y, 145, ABA_H)) modoClique = true;
-            if (modoClique) {
+            if (modoClique && tecladoAberto) {
+                // as teclas são lidas em amostrarEntrada (também durante as esperas)
+            } else if (modoClique) {
                 for (int i = 0; i < 5; i++)
                     if (uiDentro(&tp, botoesClique[i].x, CBTN_Y, botoesClique[i].w, CBTN_H)) {
                         if (i == 0) voltar = true;
@@ -533,7 +746,8 @@ void modEspelho(void) {
             int k = snprintf(cmd, sizeof(cmd), "E %s\n", tecla);
             if (!enviarTudo(sock, cmd, k, 3000)) { caiu = true; break; }
         }
-        if (abrirTeclado && !digitar(sock)) { caiu = true; break; }
+        if (abrirTeclado) abrirTecladoNaTela();
+        if (nEnvios && !mandarTeclas(sock)) { caiu = true; break; }
         if (nFila) {
             Gesto envio[16];
             int n = nFila;

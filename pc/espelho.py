@@ -1,4 +1,5 @@
-"""Espelho: manda a imagem de uma janela do PC para a tela de cima do 3DS.
+"""Espelho: manda a imagem de uma janela do PC (ou da tela inteira de um monitor) para
+a tela de cima do 3DS. A lista começa com "Tela inteira" (uma por monitor).
 
 Protocolo (TCP, o 3DS pede e o PC responde):
     "L\\n"      -> "3DSL" + u32 tamanho + títulos separados por \\n
@@ -26,6 +27,7 @@ import threading
 import time
 import unicodedata
 
+import win32api
 import win32con
 import win32gui
 import win32ui
@@ -52,6 +54,45 @@ def texto(t, maximo=38):
     return t.strip()[:maximo]
 
 
+class Tela:
+    """Um monitor inteiro (em vez de uma janela). rect = (x0, y0, x1, y1) na área de trabalho."""
+
+    def __init__(self, rect, titulo):
+        self.rect, self.titulo = rect, titulo
+
+
+def listar_telas():
+    try:
+        monitores = [m[2] for m in win32api.EnumDisplayMonitors()]
+    except Exception:
+        return []
+    monitores.sort(key=lambda r: (r[0], r[1]))
+    saida = []
+    for i, (x0, y0, x1, y1) in enumerate(monitores):
+        nome = "Tela inteira" if len(monitores) == 1 else f"Tela inteira {i + 1}"
+        saida.append((Tela((x0, y0, x1, y1), nome), f"{nome} ({x1 - x0}x{y1 - y0})"))
+    return saida
+
+
+# o que o Espelho mostra pode ser uma janela (hwnd) ou uma Tela
+def existe(alvo):
+    return isinstance(alvo, Tela) or bool(alvo and win32gui.IsWindow(alvo))
+
+
+def retangulo(alvo):
+    return alvo.rect if isinstance(alvo, Tela) else win32gui.GetWindowRect(alvo)
+
+
+def capturar_alvo(alvo):
+    if isinstance(alvo, Tela):
+        return ImageGrab.grab(bbox=alvo.rect, all_screens=True)
+    return capturar(alvo)
+
+
+def titulo_de(alvo):
+    return alvo.titulo if isinstance(alvo, Tela) else win32gui.GetWindowText(alvo)
+
+
 def listar_janelas():
     janelas = []
 
@@ -70,7 +111,8 @@ def listar_janelas():
         return True
 
     win32gui.EnumWindows(cb, None)
-    return janelas[:MAX_JANELAS]
+    telas = listar_telas()
+    return telas + janelas[:MAX_JANELAS - len(telas)]
 
 
 def capturar(hwnd, so_janela=False):
@@ -154,7 +196,7 @@ def ponto_na_janela(regiao, tamanho, u, v):
     return None
 
 
-def cursor_na_janela(hwnd):
+def cursor_na_janela(alvo):
     """Onde está o cursor do mouse, em pixels da janela; None se está fora dela ou
     escondido (jogos costumam esconder)."""
     try:
@@ -163,7 +205,7 @@ def cursor_na_janela(hwnd):
         return None
     if not flags & 1:                         # CURSOR_SHOWING
         return None
-    x0, y0, x1, y1 = win32gui.GetWindowRect(hwnd)
+    x0, y0, x1, y1 = retangulo(alvo)
     if x0 <= x < x1 and y0 <= y < y1:
         return x - x0, y - y0
     return None
@@ -200,7 +242,10 @@ TECLAS = {"enter": Key.enter, "backspace": Key.backspace, "tab": Key.tab, "esc":
 
 
 def na_frente(hwnd):
-    """Traz a janela para a frente só se ela não estiver (e espera ela aparecer)."""
+    """Traz a janela para a frente só se ela não estiver (e espera ela aparecer).
+    Na tela inteira não traz nada: o clique vai para o que estiver no ponto."""
+    if isinstance(hwnd, Tela):
+        return
     if user32.GetForegroundWindow() != hwnd:
         trazer_para_frente(hwnd)
         time.sleep(0.05)
@@ -255,7 +300,7 @@ class Espelho:
                 regiao = None                # o toque espera o primeiro quadro da janela nova
                 try:
                     escolhida = lista[int(cmd[2:])][0]
-                    self.status["janela"] = win32gui.GetWindowText(escolhida)
+                    self.status["janela"] = titulo_de(escolhida)
                 except Exception:
                     escolhida = None
 
@@ -267,9 +312,9 @@ class Espelho:
                 except ValueError:
                     zoom, cx, cy = 100, 5000, 5000
                 jpeg = b""
-                if escolhida and win32gui.IsWindow(escolhida):
+                if existe(escolhida):
                     try:
-                        img = capturar(escolhida)
+                        img = capturar_alvo(escolhida)
                         if img:
                             tamanho = img.size
                             cursor = cursor_na_janela(escolhida)
@@ -301,12 +346,12 @@ class Espelho:
                     n = int(partes[3]) if len(partes) > 3 else 0
                 except (ValueError, IndexError):
                     continue
-                if not (escolhida and regiao and win32gui.IsWindow(escolhida)):
+                if not (regiao and existe(escolhida)):
                     continue
                 ponto = ponto_na_janela(regiao, tamanho, u, v)
                 if not ponto:
                     continue                       # tocou na faixa preta
-                esquerda, topo, _, _ = win32gui.GetWindowRect(escolhida)
+                esquerda, topo, _, _ = retangulo(escolhida)
                 x, y = int(esquerda + ponto[0]), int(topo + ponto[1])
                 try:
                     if cmd[0] == "M":
@@ -324,7 +369,7 @@ class Espelho:
 
             elif cmd.startswith(("K ", "E ")):
                 # teclado do 3DS: "K <texto em hex>" digita, "E <tecla>" aperta enter etc.
-                if not (escolhida and win32gui.IsWindow(escolhida)):
+                if not existe(escolhida):
                     continue
                 try:
                     na_frente(escolhida)
