@@ -18,5 +18,7 @@ for /f "tokens=3" %%v in ('findstr /b "VERSION_MAJOR" Makefile') do set VMAJ=%%v
 for /f "tokens=3" %%v in ('findstr /b "VERSION_MINOR" Makefile') do set VMIN=%%v
 for /f "tokens=3" %%v in ('findstr /b "VERSION_MICRO" Makefile') do set VMIC=%%v
 "%MR%" -f cia -o 3dshub.cia -elf 3dshub.elf -rsf 3dshub.rsf -icon build\icon.icn -banner build\banner.bnr -exefslogo -target t -major %VMAJ% -minor %VMIN% -micro %VMIC% || exit /b 1
+rem o makerom ignora o -minor: grava a versao certa no ticket e no TMD
+py versao_cia.py 3dshub.cia %VMAJ%.%VMIN%.%VMIC% || exit /b 1
 echo.
 echo Pronto: 3dshub.cia
