@@ -15,11 +15,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 
 #define PORTA       5010
 #define ARQ_CRC_CIA "sdmc:/3ds/3dshub_cia.crc"   // versão do CIA instalado pela atualização
+#define ARQ_LIGAR   "sdmc:/3ds/3dshub_ligar.txt" // PCs que o 3DS sabe ligar: nome|broadcast|macs
 
-enum { PROCURAR, DIGITAR_IP, ATUALIZAR, ATUALIZAR_NET, REMOTO, NUMERO, SIM_NAO };
+enum { PROCURAR, DIGITAR_IP, ATUALIZAR, ATUALIZAR_NET, REMOTO, LIGAR, SUSPENDER, NUMERO, SIM_NAO };
 
 typedef struct {
     int tipo;
@@ -34,6 +36,10 @@ static const Linha linhas[] = {
       "Para quando a busca não acha o PC. O IP\naparece no menu do ícone do 3DS Hub no PC.", 0, 0, 0 },
     { REMOTO,     "Acesso pela internet", NULL, NULL,
       "Pareia um PC para usar longe de casa: na mesma\nrede é automático; longe dela, digite a senha\ndo PC. Vale para vários PCs.", 0, 0, 0 },
+    { LIGAR,      "Ligar o PC", NULL, NULL,
+      "Acorda o PC suspenso (Wake-on-LAN). O 3DS\nprecisa estar na rede de casa. Esquerda e\ndireita escolhem o PC.", 0, 0, 0 },
+    { SUSPENDER,  "Suspender o PC", NULL, NULL,
+      "Põe o PC conectado para dormir (gasta quase\nnada). Depois, \"Ligar o PC\" acorda ele.", 0, 0, 0 },
     { ATUALIZAR_NET, "Atualizar pela internet", NULL, NULL,
       "Baixa do GitHub a versão mais nova do 3DS Hub\n(precisa de internet no Wi-Fi do 3DS).", 0, 0, 0 },
     { ATUALIZAR,  "Atualizar pelo PC", NULL, NULL,
@@ -136,6 +142,8 @@ static void lerConfiguracoes(void) {
     temValores = true;
 }
 
+static bool lerInfoLigar(void);
+
 static void conectar(void) {
     desconectar();
     if (!ipPC[0] && !modoRemoto) return;
@@ -147,6 +155,13 @@ static void conectar(void) {
         return;
     }
     lerConfiguracoes();
+    // Hub do PC antigo não sabe o "M": a conversa fica perdida, então conecta de novo sem ele
+    if (temValores && !lerInfoLigar()) {
+        desconectar();
+        sock = conectarTCP(PORTA, 3000);
+        if (sock < 0) sock = -1;
+        else lerConfiguracoes();
+    }
     if (temValores) status[0] = 0;
     else snprintf(status, sizeof(status), "O PC não respondeu aos ajustes (o Hub do PC está atualizado?)");
 }
@@ -162,6 +177,173 @@ static void gravar(int i) {
         desconectar();
         snprintf(status, sizeof(status), "A conexão com o PC caiu");
     }
+}
+
+// ---------------------------------------------------------------- ligar e suspender o PC
+//
+// Ao conectar, o PC conta o nome, o broadcast da rede e os MACs das placas de rede
+// ("M"); o 3DS guarda em ARQ_LIGAR. "Ligar o PC" manda o pacote mágico do Wake-on-LAN
+// (6 x FF + 16 x o MAC) por broadcast, então só funciona na rede de casa.
+
+#define MAX_LIGAR 8
+typedef struct { char nome[32], broadcast[16], macs[80]; } PCLigar;
+static PCLigar pcsLigar[MAX_LIGAR];
+static int nLigar = -1, escolhaLigar;
+
+static void lerPCsLigar(void) {
+    nLigar = 0;
+    FILE *f = fopen(ARQ_LIGAR, "r");
+    if (!f) return;
+    char l[160];
+    while (nLigar < MAX_LIGAR && fgets(l, sizeof(l), f)) {
+        l[strcspn(l, "\r\n")] = 0;
+        char *a = strchr(l, '|'), *b = a ? strchr(a + 1, '|') : NULL;
+        if (!a || !b) continue;
+        *a = *b = 0;
+        PCLigar *p = &pcsLigar[nLigar++];
+        snprintf(p->nome, sizeof(p->nome), "%s", l);
+        snprintf(p->broadcast, sizeof(p->broadcast), "%s", a + 1);
+        snprintf(p->macs, sizeof(p->macs), "%s", b + 1);
+    }
+    fclose(f);
+}
+
+static void gravarPCsLigar(void) {
+    FILE *f = fopen(ARQ_LIGAR, "w");
+    if (!f) return;
+    for (int i = 0; i < nLigar; i++)
+        fprintf(f, "%s|%s|%s\n", pcsLigar[i].nome, pcsLigar[i].broadcast, pcsLigar[i].macs);
+    fclose(f);
+}
+
+// O PC que "Ligar o PC" vai acordar: começa pelo que está em uso.
+static void escolherPCLigar(void) {
+    if (nLigar < 0) lerPCsLigar();
+    for (int i = 0; i < nLigar; i++)
+        if (nomePC[0] && !strcmp(pcsLigar[i].nome, nomePC)) escolhaLigar = i;
+    if (escolhaLigar >= nLigar) escolhaLigar = 0;
+}
+
+// Pergunta ao PC conectado como ligar ele. false = o Hub do PC não respondeu (versão antiga).
+static bool lerInfoLigar(void) {
+    char cab[8], texto[160];
+    if (!enviarTudo(sock, "M\n", 2, 2000) || !receberTudo(sock, cab, 8, 2000) || memcmp(cab, "3DSM", 4))
+        return false;
+    u32 tam;
+    memcpy(&tam, cab + 4, 4);
+    if (tam >= sizeof(texto)) return false;
+    if (!tam) return true;                       // o PC não achou placa de rede
+    if (!receberTudo(sock, texto, tam, 3000)) return false;
+    texto[tam] = 0;
+    char *salvo, *nome = strtok_r(texto, "\n", &salvo), *bc = strtok_r(NULL, "\n", &salvo),
+         *macs = strtok_r(NULL, "\n", &salvo);
+    if (!nome || !bc || !macs) return true;
+    if (nLigar < 0) lerPCsLigar();
+    int i = 0;
+    while (i < nLigar && strcmp(pcsLigar[i].nome, nome)) i++;
+    if (i == nLigar) {
+        if (nLigar == MAX_LIGAR) {               // cheio: esquece o mais antigo
+            memmove(pcsLigar, pcsLigar + 1, (MAX_LIGAR - 1) * sizeof(PCLigar));
+            i = MAX_LIGAR - 1;
+        } else {
+            nLigar++;
+        }
+        memset(&pcsLigar[i], 0, sizeof(PCLigar));
+    }
+    PCLigar novo;
+    memset(&novo, 0, sizeof(novo));
+    snprintf(novo.nome, sizeof(novo.nome), "%s", nome);
+    snprintf(novo.broadcast, sizeof(novo.broadcast), "%s", bc);
+    snprintf(novo.macs, sizeof(novo.macs), "%s", macs);
+    if (memcmp(&pcsLigar[i], &novo, sizeof(novo))) {
+        pcsLigar[i] = novo;
+        gravarPCsLigar();
+    }
+    escolherPCLigar();
+    return true;
+}
+
+static bool lerMac(const char *s, u8 mac[6]) {
+    unsigned v[6];
+    if (sscanf(s, "%2x:%2x:%2x:%2x:%2x:%2x", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) != 6) return false;
+    for (int i = 0; i < 6; i++) mac[i] = v[i];
+    return true;
+}
+
+// Manda o pacote mágico para cada MAC do PC, por broadcast nas portas 7 e 9, 3 vezes.
+static int mandarPacoteMagico(const PCLigar *p) {
+    int s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s < 0) return 0;
+    struct in_addr destinos[3];
+    int nDest = 0;
+    destinos[nDest++].s_addr = htonl(INADDR_BROADCAST);
+    if (inet_aton(p->broadcast, &destinos[nDest]) && destinos[nDest].s_addr != htonl(INADDR_BROADCAST)) nDest++;
+    struct in_addr ip, mascara, bc;
+    if (SOCU_GetIPInfo(&ip, &mascara, &bc) == 0 && bc.s_addr && bc.s_addr != htonl(INADDR_BROADCAST) &&
+        (nDest < 2 || bc.s_addr != destinos[1].s_addr))
+        destinos[nDest++] = bc;
+
+    int enviados = 0;
+    for (int vez = 0; vez < 3; vez++) {
+        char macs[80], *salvo;
+        snprintf(macs, sizeof(macs), "%s", p->macs);
+        for (char *m = strtok_r(macs, " ", &salvo); m; m = strtok_r(NULL, " ", &salvo)) {
+            u8 mac[6], pacote[102];
+            if (!lerMac(m, mac)) continue;
+            memset(pacote, 0xFF, 6);
+            for (int k = 0; k < 16; k++) memcpy(pacote + 6 + k * 6, mac, 6);
+            for (int d = 0; d < nDest; d++)
+                for (int porta = 7; porta <= 9; porta += 2) {
+                    struct sockaddr_in dest;
+                    memset(&dest, 0, sizeof(dest));
+                    dest.sin_family = AF_INET;
+                    dest.sin_port   = htons(porta);
+                    dest.sin_addr   = destinos[d];
+                    if (sendto(s, pacote, sizeof(pacote), 0, (struct sockaddr *)&dest, sizeof(dest)) > 0) enviados++;
+                }
+        }
+        svcSleepThread(150 * 1000000ULL);
+    }
+    close(s);
+    return enviados;
+}
+
+static void ligarPC(void) {
+    if (nLigar < 0) escolherPCLigar();
+    if (escolhaLigar >= nLigar) escolhaLigar = 0;
+    if (nLigar <= 0) {
+        uiAviso("Ligar o PC", "O 3DS ainda não sabe ligar nenhum PC.\n\nCom o PC ligado e o Hub do PC atualizado,\n"
+                "abra estes Ajustes uma vez: o 3DS guarda\no que precisa.", IC_PC, COR_AMARELO);
+        return;
+    }
+    const PCLigar *p = &pcsLigar[escolhaLigar];
+    desenharMensagem("Ligando o PC...", p->nome, -1, NULL);
+    int enviados = mandarPacoteMagico(p);
+    char texto[256];
+    if (!enviados)
+        snprintf(texto, sizeof(texto), "Não consegui mandar o sinal.\nO 3DS está conectado no Wi-Fi?");
+    else
+        snprintf(texto, sizeof(texto), "Sinal mandado para %s.\n\nSe ele está suspenso, acorda em alguns\n"
+                 "segundos. Depois use \"Procurar o PC na rede\".%s", p->nome,
+                 modoRemoto ? "\n\nAtenção: só funciona na rede de casa." : "");
+    uiAviso("Ligar o PC", texto, IC_PC, enviados ? COR_VERDE_AGUA : COR_AMARELO);
+}
+
+static void suspenderPC(void) {
+    if (sock < 0) {
+        uiAviso("Suspender o PC", "Sem conexão com o PC.", IC_PC, COR_AMARELO);
+        return;
+    }
+    char texto[200];
+    snprintf(texto, sizeof(texto), "%s vai dormir.%s", nomePC[0] ? nomePC : "O PC",
+             modoRemoto ? "\n\nVocê está longe de casa: para ligar de\nnovo, o 3DS precisa estar na rede de casa."
+                        : "\n\nPara ligar de novo: \"Ligar o PC\".");
+    if (!confirmar("Suspender o PC?", texto, "Suspender", "Cancelar")) return;
+    char cab[8];
+    bool ok = enviarTudo(sock, "Z\n", 2, 3000) && receberTudo(sock, cab, 8, 3000) && !memcmp(cab, "3DSZ", 4);
+    desconectar();
+    if (ok) uiAviso("Suspender o PC", "Pronto: o PC está indo dormir.", IC_PC, COR_VERDE_AGUA);
+    else uiAviso("Suspender o PC", "O PC não respondeu. O Hub do PC está\natualizado (1.9.0 ou mais nova)?", IC_PC, COR_AMARELO);
 }
 
 // ---------------------------------------------------------------- procurar o PC
@@ -583,6 +765,11 @@ static void textoValor(int i, char *s, size_t n) {
     else if (l->tipo == DIGITAR_IP) snprintf(s, n, "%s", ipPC[0] ? ipPC : "-");
     else if (l->tipo == ATUALIZAR)  snprintf(s, n, "%s", envIsHomebrew() ? ".3dsx" : "CIA");
     else if (l->tipo == ATUALIZAR_NET) snprintf(s, n, "v%s", updater_version());
+    else if (l->tipo == LIGAR) {
+        if (nLigar < 0) escolherPCLigar();
+        snprintf(s, n, "%s", nLigar > 0 ? pcsLigar[escolhaLigar].nome : "Nenhum PC");
+    }
+    else if (l->tipo == SUSPENDER)  snprintf(s, n, "%s", sock >= 0 ? (nomePC[0] ? nomePC : "PC") : "-");
     else if (l->tipo == REMOTO) {
         if (!tunelQuantos()) snprintf(s, n, "Nenhum PC");
         else snprintf(s, n, "%d PC%s%s", tunelQuantos(), tunelQuantos() > 1 ? "s" : "", modoRemoto ? " (em uso)" : "");
@@ -679,6 +866,8 @@ void modAjustes(void) {
         if (sel >= inicio + VISIVEIS) inicio = sel - VISIVEIS + 1;
 
         if (direcao && precisaDoPC(sel)) mudar(sel, direcao);
+        if (direcao && linhas[sel].tipo == LIGAR && nLigar > 1)
+            escolhaLigar = (escolhaLigar + direcao + nLigar) % nLigar;
         if (acao >= 0) {
             sel = acao;
             switch (linhas[acao].tipo) {
@@ -696,6 +885,12 @@ void modAjustes(void) {
                 break;
             case ATUALIZAR_NET:
                 atualizarPelaInternet(false);
+                break;
+            case LIGAR:
+                ligarPC();
+                break;
+            case SUSPENDER:
+                suspenderPC();
                 break;
             case SIM_NAO:
                 mudar(acao, 1);

@@ -123,7 +123,24 @@ ATUALIZAR SEM TIRAR O CARTAO
   no 3DS, va em Ajustes > Atualizar pelo PC.
 - Versoes novas e o pacote completo: https://github.com/ChunoB/3DSHub/releases
 
-O QUE MUDOU NESTA VERSAO (1.8.1)
+LIGAR E SUSPENDER O PC PELO 3DS
+- No 3DS, em Ajustes: "Suspender o PC" poe o PC para dormir e "Ligar o PC"
+  acorda ele (Wake-on-LAN). Ligar so funciona com o 3DS na rede de casa.
+- O 3DS aprende como ligar cada PC sozinho: abra os Ajustes uma vez com o
+  PC ligado (e o Hub do PC 1.9.0). Esquerda/direita escolhem o PC.
+- O PC precisa estar SUSPENSO, nao desligado (desligado, so com cabo de
+  rede e Wake-on-LAN ligado na BIOS).
+- Configure uma vez no PC (Gerenciador de Dispositivos > Adaptadores de
+  rede > sua placa de rede > Gerenciamento de Energia): marque "Permitir
+  que este dispositivo ative o computador" e "Permitir somente um pacote
+  magico para ativar o computador". Se a aba "Avancado" tiver "Wake on
+  Magic Packet" ou "WoWLAN", deixe ativado.
+
+O QUE MUDOU NESTA VERSAO (1.9.0)
+- Ajustes > "Ligar o PC" e "Suspender o PC" (veja acima).
+- Atualize a pasta pc do PC.
+
+VERSAO 1.8.1
 - Steam: o som do PC chega bem mais alto no 3DS. O Hub do PC aumenta
   sozinho o som baixo (ate 8x) e um limitador evita estourar. Para mudar
   o maximo: "volume_som" na parte "steam" do config.json (1 = sem aumento).

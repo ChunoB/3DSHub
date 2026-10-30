@@ -12,9 +12,15 @@ Protocolo (TCP, porta 5010; o 3DS pede e o PC responde):
                             só aceito do próprio PC: usado pelo parear_codigo.py)
     "S <senha em hex>\\n" -> "3DSS" + u32 (1 = senha definida e publicada, 0 = não; "S -" apaga)
                             (senha fixa do PC; só aceito do próprio PC: usado pelo definir_senha.py)
+    "M\\n"               -> "3DSM" + u32 tamanho + "nome\\nbroadcast\\nmac1 mac2...\\n"
+                            (para o 3DS ligar o PC pela rede: Wake-on-LAN; o primeiro MAC é
+                            o da placa que fala com o 3DS)
+    "Z\\n"               -> "3DSZ" + u32 1, e o PC suspende logo depois
 """
 
 import copy
+import ctypes
+import ipaddress
 import os
 import socket
 import struct
@@ -63,6 +69,57 @@ def info_app(tipo):
         with open(caminho, "rb") as f:
             _crc_cache[tipo] = (chave, zlib.crc32(f.read()) & 0xFFFFFFFF)
     return caminho, chave[2], _crc_cache[tipo][1]
+
+
+# placas que não ligam o PC (VPN, máquinas virtuais...)
+VIRTUAIS = ("vpn", "virtual", "vethernet", "loopback", "bluetooth", "hyper-v", "vmware", "tap", "tun")
+
+
+def _ip_de_saida():
+    """IP local da placa que vai para a internet (sem mandar nada)."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 53))
+            return s.getsockname()[0]
+    except OSError:
+        return ""
+
+
+def info_para_ligar(ip_local):
+    """(broadcast, [macs]) das placas de rede físicas; a do ip_local vem primeiro."""
+    import psutil
+    if not ip_local or ip_local.startswith("127."):
+        ip_local = _ip_de_saida()
+    broadcast, primeiro, outros = "255.255.255.255", [], []
+    for nome, enderecos in psutil.net_if_addrs().items():
+        if any(v in nome.lower() for v in VIRTUAIS):
+            continue
+        mac = next((a.address for a in enderecos if a.family == psutil.AF_LINK), "")
+        mac = mac.replace("-", ":").upper()
+        if len(mac) != 17 or mac in ("00:00:00:00:00:00", "FF:FF:FF:FF:FF:FF") or mac in primeiro:
+            continue
+        ipv4 = [a for a in enderecos if a.family == socket.AF_INET]
+        if any(a.address == ip_local for a in ipv4):
+            primeiro.append(mac)
+            if mac in outros:
+                outros.remove(mac)
+            a = next(a for a in ipv4 if a.address == ip_local)
+            if a.netmask:
+                rede = ipaddress.IPv4Network(f"{a.address}/{a.netmask}", strict=False)
+                broadcast = str(rede.broadcast_address)
+        elif mac not in outros:
+            outros.append(mac)
+    return broadcast, primeiro + outros
+
+
+def suspender_depois(segundos=1.5):
+    """Suspende o PC (sem hibernar) depois de responder ao 3DS."""
+    def _ir():
+        time.sleep(segundos)
+        print("Ajustes: suspendendo o PC (pedido do 3DS)")
+        # SetSuspendState(hibernar=0, forçar=1, sem_eventos_de_acordar=0)
+        ctypes.windll.powrprof.SetSuspendState(0, 1, 0)
+    threading.Thread(target=_ir, daemon=True, name="suspender").start()
 
 
 def formatar(valor):
@@ -185,3 +242,17 @@ class Ajustes:
                     except ValueError:
                         ok = False
                 conn.sendall(b"3DSS" + struct.pack("<I", 1 if ok else 0))
+
+            elif cmd == "M":
+                try:
+                    broadcast, macs = info_para_ligar(conn.getsockname()[0])
+                except Exception as e:
+                    print("Ajustes: não consegui ler as placas de rede", repr(e))
+                    broadcast, macs = "", []
+                nome = socket.gethostname()[:30]
+                texto = f"{nome}\n{broadcast}\n{' '.join(macs[:4])}\n".encode() if macs else b""
+                conn.sendall(b"3DSM" + struct.pack("<I", len(texto)) + texto)
+
+            elif cmd == "Z":
+                conn.sendall(b"3DSZ" + struct.pack("<I", 1))
+                suspender_depois()
