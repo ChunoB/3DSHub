@@ -3,7 +3,8 @@
 //   cima/baixo + A ou toque : escolher a janela
 //   R / L (segurar)         : aproximar / afastar (até 8x)
 //   circle pad, cruz ou arrastar o dedo (aba Mover): mover a parte visível
-//   aba Clicar (ou X)       : o toque vira mouse no PC (toque, segurar, arrastar)
+//   aba Clicar (ou X)       : o toque vira mouse no PC (toque, segurar, arrastar,
+//                             faixa de rolagem); SELECT ou Teclado: digitar no PC
 //   Y                       : voltar para a janela inteira
 //   B                       : voltar para a lista
 //   X (na lista)            : atualizar a lista
@@ -132,33 +133,41 @@ static void controlarZoom(u32 down, u32 held, float dt, bool arrastar) {
 }
 
 // ---------------------------------------------------------------- modo Clicar
-// A imagem aparece pequena na tela de baixo e o toque vira mouse no PC:
-//   toque = clique esquerdo, segurar = clique direito, arrastar = rodinha.
+// A imagem aparece na tela de baixo e o toque vira mouse no PC:
+//   toque = clique esquerdo (dois toques rápidos = clique duplo)
+//   segurar parado = clique direito (ou o botão Direito: o próximo toque é direito)
+//   arrastar = só leva o mouse (aparece a seta na imagem)
+//   faixa da direita = rodinha, como no Controle (dedo para cima = sobe)
 // O laço do espelho só roda a cada quadro recebido (poucos por segundo), então a
 // entrada também é lida durante as esperas de rede (aoEsperarRede), a cada ~16 ms:
 // assim um toque rápido entre dois quadros não se perde.
 
-#define MINI_ESC ((ARRASTO_Y1 - ARRASTO_Y0) / 240.0f)
-#define MINI_W   (400 * MINI_ESC)
-#define MINI_H   (ARRASTO_Y1 - ARRASTO_Y0)
-#define MINI_X   (160 - MINI_W / 2)
-#define MINI_Y   ARRASTO_Y0
-#define SEGURAR_MS  600     // segurar parado = clique direito
-#define MOVER_PX    8       // mais que isso = arrastar (rodinha), não toque
-#define ROLAR_PX    12      // pixels de arrasto por "dente" da rodinha
+#define MINI_X   6          // imagem 250x150 (o formato 5:3 da tela de cima)
+#define MINI_Y   44
+#define MINI_W   250.0f
+#define MINI_H   150.0f
+#define MINI_ESC (MINI_H / 240.0f)
+#define ROL_X    262        // faixa de rolagem
+#define ROL_W    52
+#define CBTN_Y   198        // botões do modo Clicar
+#define CBTN_H   38
+#define SEGURAR_MS  700     // segurar parado = clique direito
+#define MOVER_PX    14      // a tela de toque treme uns pixels: menos que isso ainda é toque
+#define ROLAR_PX    8       // pixels de arrasto por "dente" da rodinha
 
-static bool modoClique, mostrandoJanela;
+static bool modoClique, mostrandoJanela, direitoArmado;
 static u32 downGuardado;            // botões apertados entre uma leitura e outra do laço
 static touchPosition toqueDown;     // onde o dedo encostou da última vez
+static int ultU = 5000, ultV = 5000;   // último ponto apontado (a rodinha gira ali)
 
-typedef struct { char tipo; int u, v, n; } Gesto;   // 'T' clique, 'R' rodinha
-static Gesto fila[8];
+typedef struct { char tipo; int u, v, n; } Gesto;   // 'T' clique, 'M' mover, 'R' rodinha
+static Gesto fila[16];
 static int nFila;
 
 static struct {
-    bool ativo, moveu, direito;
+    bool ativo, moveu, direito, rolando;
     u64 t0;
-    int x0, y0, ultimoY;
+    int x0, y0, x, y, ultimoY;
     int acumulado;
 } g;
 
@@ -166,16 +175,28 @@ static bool naMini(int x, int y) {
     return x >= MINI_X && x < MINI_X + MINI_W && y >= MINI_Y && y < MINI_Y + MINI_H;
 }
 
-static void enfileirar(char tipo, int n) {
-    int u = (g.x0 - MINI_X) / MINI_W * 10000, v = (g.y0 - MINI_Y) / MINI_H * 10000;
-    u = u < 0 ? 0 : u > 10000 ? 10000 : u;
-    v = v < 0 ? 0 : v > 10000 ? 10000 : v;
-    // rodinha seguida no mesmo ponto: junta num pedido só
-    if (tipo == 'R' && nFila && fila[nFila - 1].tipo == 'R' && fila[nFila - 1].u == u && fila[nFila - 1].v == v) {
+static bool naFaixa(int x, int y) {
+    return x >= ROL_X && x < ROL_X + ROL_W && y >= MINI_Y && y < MINI_Y + MINI_H;
+}
+
+static void enfileirar(char tipo, int x, int y, int n) {
+    int u = ultU, v = ultV;
+    if (tipo != 'R') {
+        u = (x - MINI_X) / MINI_W * 10000;
+        v = (y - MINI_Y) / MINI_H * 10000;
+        u = u < 0 ? 0 : u > 10000 ? 10000 : u;
+        v = v < 0 ? 0 : v > 10000 ? 10000 : v;
+        ultU = u;
+        ultV = v;
+    }
+    // movimento ou rodinha seguidos: junta num pedido só
+    if (nFila && fila[nFila - 1].tipo == tipo && tipo != 'T') {
+        fila[nFila - 1].u = u;
+        fila[nFila - 1].v = v;
         fila[nFila - 1].n += n;
         return;
     }
-    if (nFila < 8) fila[nFila++] = (Gesto){ tipo, u, v, n };
+    if (nFila < 16) fila[nFila++] = (Gesto){ tipo, u, v, n };
 }
 
 static void amostrarEntrada(void) {
@@ -187,39 +208,67 @@ static void amostrarEntrada(void) {
     downGuardado |= down;
 
     if (!modoClique || !mostrandoJanela) {
-        g.ativo = false;
+        g.ativo = g.rolando = false;
         return;
     }
     u64 agora = osGetTime();
-    if ((down & KEY_TOUCH) && naMini(tp.px, tp.py)) {          // encostou na imagem
+    if ((down & KEY_TOUCH) && (naMini(tp.px, tp.py) || naFaixa(tp.px, tp.py))) {
         memset(&g, 0, sizeof(g));
-        g.ativo = true;
+        g.rolando = naFaixa(tp.px, tp.py);
+        g.ativo = !g.rolando;
         g.t0 = agora;
-        g.x0 = tp.px;
-        g.y0 = tp.py;
+        g.x0 = g.x = tp.px;
+        g.y0 = g.y = tp.py;
+        g.ultimoY = tp.py;
+        return;
+    }
+
+    if (g.rolando) {
+        if (!(held & KEY_TOUCH)) { g.rolando = false; return; }
+        g.acumulado += g.ultimoY - tp.py;            // dedo para cima = rodinha para cima
+        while (g.acumulado >= ROLAR_PX)  { enfileirar('R', 0, 0, 1);  g.acumulado -= ROLAR_PX; }
+        while (g.acumulado <= -ROLAR_PX) { enfileirar('R', 0, 0, -1); g.acumulado += ROLAR_PX; }
         g.ultimoY = tp.py;
         return;
     }
     if (!g.ativo) return;
 
     if (held & KEY_TOUCH) {
+        // a primeira leitura do toque é a menos precisa: vale onde o dedo está agora
+        g.x = tp.px;
+        g.y = tp.py;
         int dx = tp.px - g.x0, dy = tp.py - g.y0;
         if (!g.moveu && !g.direito && dx * dx + dy * dy > MOVER_PX * MOVER_PX) g.moveu = true;
-        if (g.moveu) {
-            // dedo para cima = conteúdo sobe = rodinha para baixo (como no celular)
-            g.acumulado += tp.py - g.ultimoY;
-            while (g.acumulado <= -ROLAR_PX) { enfileirar('R', -1); g.acumulado += ROLAR_PX; }
-            while (g.acumulado >= ROLAR_PX)  { enfileirar('R', 1);  g.acumulado -= ROLAR_PX; }
-        }
-        g.ultimoY = tp.py;
+        if (g.moveu && naMini(tp.px, tp.py)) enfileirar('M', tp.px, tp.py, 0);
         if (!g.moveu && !g.direito && agora - g.t0 >= SEGURAR_MS) {
-            enfileirar('T', 2);
+            enfileirar('T', g.x, g.y, 2);
             g.direito = true;
+            direitoArmado = false;
         }
     } else {                                                    // soltou
-        if (!g.moveu && !g.direito && agora - g.t0 < SEGURAR_MS) enfileirar('T', 1);
+        if (!g.moveu && !g.direito) {
+            enfileirar('T', g.x, g.y, direitoArmado ? 2 : 1);
+            direitoArmado = false;
+        }
         g.ativo = false;
     }
+}
+
+// Teclado do 3DS: o texto vai para a janela do PC ("K" + texto em hex).
+static bool digitar(int sock) {
+    static char texto[256];
+    SwkbdState kb;
+    swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, sizeof(texto) - 1);
+    swkbdSetHintText(&kb, "Texto para digitar no PC");
+    swkbdSetButton(&kb, SWKBD_BUTTON_LEFT, "Cancelar", false);
+    swkbdSetButton(&kb, SWKBD_BUTTON_RIGHT, "Digitar", true);
+    texto[0] = 0;
+    if (swkbdInputText(&kb, texto, sizeof(texto)) != SWKBD_BUTTON_RIGHT || !texto[0]) return true;
+    static char cmd[2 * sizeof(texto) + 8];
+    int k = snprintf(cmd, sizeof(cmd), "K ");
+    for (const u8 *p = (const u8 *)texto; *p && k < (int)sizeof(cmd) - 4; p++) k += sprintf(cmd + k, "%02x", *p);
+    cmd[k++] = '\n';
+    return enviarTudo(sock, cmd, k, 3000);
 }
 
 // ---------------------------------------------------------------- desenho
@@ -239,8 +288,9 @@ static void desenharLista(int sel, const char *aviso) {
     uiTexto(94, 74, 13, COR_AZUL_CL, ESQ, 290, "Ela aparece aqui, ao vivo");
     uiTexto(16, 116, 13, COR_TEXTO2, ESQ, 0,
             "Depois de escolher: R/L para zoom e circle pad\n"
-            "para mover. Na aba Clicar, toque na imagem da\n"
-            "tela de baixo para clicar na janela do PC.");
+            "para mover. Na aba Clicar, toque na imagem para\n"
+            "clicar, arraste para levar o mouse, role na faixa\n"
+            "da direita e use Teclado (ou SELECT) para digitar.");
     if (aviso) {
         uiRetArred(16, 186, 368, 26, 10, HEX(0x633806));
         uiTexto(28, 191, 13, COR_AMARELO, ESQ, 344, "%s", aviso);
@@ -267,6 +317,10 @@ static const BotaoEsp botoesEsp[] = {
 };
 #define BTN_Y 190
 #define BTN_H 40
+// botões do modo Clicar: Lista, Teclado, Enter, Apagar, Direito
+static const struct { float x, w; } botoesClique[] = {
+    { 4, 54 }, { 62, 70 }, { 136, 54 }, { 194, 60 }, { 258, 58 },
+};
 
 static void desenharEspelho(UiImagem *im, bool temImagem, const char *janela, float fps) {
     uiTela(alvoCima);
@@ -279,8 +333,9 @@ static void desenharEspelho(UiImagem *im, bool temImagem, const char *janela, fl
         uiIcone(IC_LUPA, 344, 19, 12, COR_AZUL_CL, COR_ESCURO);
         uiTexto(372, 11, 13, COR_TEXTO, CENTRO, 0, "%.1fx", zoom);
     }
-    uiRetArred(8, 210, 384, 22, 11, COR_ESCURO);                // nome da janela
-    uiTexto(18, 213, 13, COR_TEXTO2, ESQ, 364, "%s", janela);
+    // nome da janela: só o texto, no topo (com sombra para ler em cima da imagem)
+    uiTexto(201, 12, 12, COR_ESCURO, CENTRO, 220, "%s", janela);
+    uiTexto(200, 11, 12, COR_BRANCO, CENTRO, 220, "%s", janela);
 
     uiTela(alvoBaixo);
     // abas: Mover (o dedo move a imagem) / Clicar (o dedo vira mouse no PC)
@@ -289,12 +344,24 @@ static void desenharEspelho(UiImagem *im, bool temImagem, const char *janela, fl
     uiRetArred(165, ABA_Y, 145, ABA_H, 9, modoClique ? COR_AZUL : COR_CARTAO);
     uiTexto(237, ABA_Y + 8, 14, modoClique ? COR_BRANCO : COR_MUDO, CENTRO, 0, "Clicar");
 
-    uiRetArred(10, ARRASTO_Y0, 300, ARRASTO_Y1 - ARRASTO_Y0, 10, COR_CARTAO);
     if (modoClique) {
+        uiRet(MINI_X, MINI_Y, MINI_W, MINI_H, COR_CARTAO);
         if (temImagem) uiImagemDesenharEscala(im, MINI_X, MINI_Y, MINI_ESC);
-        if (g.ativo) uiCirculo(g.x0, g.y0, 7, C2D_Color32(0x85, 0xB7, 0xEB, 0xA0));
-        uiTexto(160, 184, 10, COR_MUDO, CENTRO, 0, "Toque: clique   Segurar: direito   Arrastar: rolar");
+        if (g.ativo) uiCirculo(g.x, g.y, 7, C2D_Color32(0x85, 0xB7, 0xEB, 0xA0));
+        // faixa de rolagem, como a do Controle
+        uiRetArred(ROL_X, MINI_Y, ROL_W, MINI_H, 12, g.rolando ? COR_AZUL : COR_CARTAO2);
+        uiIcone(IC_SETA_CIMA, ROL_X + ROL_W / 2, MINI_Y + 22, 16, COR_MUDO, g.rolando ? COR_AZUL : COR_CARTAO2);
+        uiIcone(IC_SETA_BAIXO, ROL_X + ROL_W / 2, MINI_Y + MINI_H - 22, 16, COR_MUDO, g.rolando ? COR_AZUL : COR_CARTAO2);
+        uiTexto(ROL_X + ROL_W / 2, MINI_Y + MINI_H / 2 - 7, 11, COR_MUDO, CENTRO, 0, "rolar");
+        static const char *rotulos[] = { "Lista", "Teclado", "Enter", "Apagar", "Direito" };
+        for (int i = 0; i < 5; i++) {
+            bool ligado = i == 4 && direitoArmado;
+            uiBotao(botoesClique[i].x, CBTN_Y, botoesClique[i].w, CBTN_H, rotulos[i], -1,
+                    ligado ? COR_AZUL : COR_CARTAO, ligado ? COR_BRANCO : COR_TEXTO);
+        }
+        return;
     } else {
+        uiRetArred(10, ARRASTO_Y0, 300, ARRASTO_Y1 - ARRASTO_Y0, 10, COR_CARTAO);
         // minimapa da parte visível
         float mw = 150, mh = 90, mx = 160 - mw / 2, my = 60;
         uiRet(mx, my, mw, mh, COR_CARTAO2);
@@ -359,7 +426,7 @@ void modEspelho(void) {
     float fps = 0;
     bool saiu = false, caiu = false;
 
-    modoClique = mostrandoJanela = false;
+    modoClique = mostrandoJanela = direitoArmado = false;
     downGuardado = 0;
     nFila = 0;
     memset(&g, 0, sizeof(g));
@@ -413,18 +480,30 @@ void modEspelho(void) {
         }
 
         // abas e botões da tela de baixo
-        bool voltar = down & KEY_B;
+        bool voltar = down & KEY_B, abrirTeclado = modoClique && (down & KEY_SELECT);
+        const char *tecla = NULL;
         if (down & KEY_X) modoClique = !modoClique;
         if (down & KEY_TOUCH) {
             if (uiDentro(&tp, 10, ABA_Y, 145, ABA_H))  modoClique = false;
             if (uiDentro(&tp, 165, ABA_Y, 145, ABA_H)) modoClique = true;
-            for (int i = 0; i < 4; i++)
-                if (uiDentro(&tp, botoesEsp[i].x, BTN_Y, botoesEsp[i].w, BTN_H)) {
-                    if (i == 0) voltar = true;
-                    if (i == 1) { zoom = 1; centroX = centroY = 0.5f; }
-                    if (i == 2) zoom = zoom / 1.5f < 1 ? 1 : zoom / 1.5f;
-                    if (i == 3) zoom = zoom * 1.5f > ZOOM_MAX ? ZOOM_MAX : zoom * 1.5f;
-                }
+            if (modoClique) {
+                for (int i = 0; i < 5; i++)
+                    if (uiDentro(&tp, botoesClique[i].x, CBTN_Y, botoesClique[i].w, CBTN_H)) {
+                        if (i == 0) voltar = true;
+                        if (i == 1) abrirTeclado = true;
+                        if (i == 2) tecla = "enter";
+                        if (i == 3) tecla = "backspace";
+                        if (i == 4) direitoArmado = !direitoArmado;
+                    }
+            } else {
+                for (int i = 0; i < 4; i++)
+                    if (uiDentro(&tp, botoesEsp[i].x, BTN_Y, botoesEsp[i].w, BTN_H)) {
+                        if (i == 0) voltar = true;
+                        if (i == 1) { zoom = 1; centroX = centroY = 0.5f; }
+                        if (i == 2) zoom = zoom / 1.5f < 1 ? 1 : zoom / 1.5f;
+                        if (i == 3) zoom = zoom * 1.5f > ZOOM_MAX ? ZOOM_MAX : zoom * 1.5f;
+                    }
+            }
         }
 
         u32 tam;
@@ -449,8 +528,14 @@ void modEspelho(void) {
 
         // toques do modo Clicar: manda para o PC (copia antes, porque enviar
         // também lê a entrada e pode acrescentar gestos na fila)
+        if (tecla) {
+            char cmd[24];
+            int k = snprintf(cmd, sizeof(cmd), "E %s\n", tecla);
+            if (!enviarTudo(sock, cmd, k, 3000)) { caiu = true; break; }
+        }
+        if (abrirTeclado && !digitar(sock)) { caiu = true; break; }
         if (nFila) {
-            Gesto envio[8];
+            Gesto envio[16];
             int n = nFila;
             memcpy(envio, fila, sizeof(Gesto) * n);
             nFila = 0;

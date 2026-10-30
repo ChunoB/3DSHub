@@ -137,7 +137,22 @@ LIGAR E SUSPENDER O PC PELO 3DS
   magico para ativar o computador". Se a aba "Avancado" tiver "Wake on
   Magic Packet" ou "WoWLAN", deixe ativado.
 
-O QUE MUDOU NESTA VERSAO (1.9.1)
+O QUE MUDOU NESTA VERSAO (1.10.0)
+- Espelho, aba Clicar refeita:
+  * Imagem maior para tocar. Toque = clique (dois toques rapidos = clique
+    duplo), segurar parado = clique direito, ou aperte "Direito" e o
+    proximo toque e com o botao direito.
+  * Arrastar o dedo na imagem leva o mouse do PC (sem clicar).
+  * Faixa "rolar" na direita, como no Controle (dedo para cima = sobe).
+  * Teclado (ou SELECT): digite no 3DS e o texto vai para a janela do PC.
+    Botoes Enter e Apagar.
+  * Toques que tremem um pouco na tela continuam valendo como clique (antes
+    viravam rolagem e o clique nao acontecia).
+- A seta do mouse aparece na imagem quando esta em cima da janela.
+- O nome da janela foi para o topo, so o texto (a barra de baixo saiu).
+- Atualize a pasta pc do PC.
+
+VERSAO 1.9.1
 - Steam: "Fechar" agora fecha o jogo no PC de verdade. O Hub pede para
   todos os programas da pasta do jogo fecharem (o jogo pode salvar) e,
   se depois de 6 s algum ainda estiver aberto, encerra a forca. Funciona

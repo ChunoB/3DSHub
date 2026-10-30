@@ -7,8 +7,15 @@ Protocolo (TCP, o 3DS pede e o PC responde):
     "F z x y\\n" -> com zoom (z = zoom x100, x/y = centro x10000):
                   "3DSZ" + u32 tamanho + u16 x + u16 y (centro efetivo) + JPEG
     "T u v b\\n" -> clique no ponto (u, v de 0 a 10000 na imagem; b 1 = esquerdo, 2 = direito)
-    "R u v n\\n" -> rodinha do mouse no ponto (n passos; positivo = sobe). Sem resposta.
-Os títulos vão em UTF-8 (com acentos).
+    "M u v\\n"   -> só leva o mouse até o ponto (sem clicar)
+    "R u v n\\n" -> rodinha do mouse no ponto (n passos; positivo = sobe)
+    "K <hex>\\n" -> digita o texto (UTF-8 em hex) na janela
+    "E <tecla>\\n" -> aperta uma tecla: enter, backspace, tab ou esc
+T, M, R, K e E não têm resposta. Os títulos vão em UTF-8 (com acentos).
+
+O cursor do mouse aparece desenhado na imagem quando está em cima da janela. O
+clique deixa o mouse no ponto clicado (antes ele voltava para onde estava), então
+dá para ver onde clicou e dois toques rápidos viram clique duplo no PC.
 """
 
 import ctypes
@@ -22,9 +29,9 @@ import unicodedata
 import win32con
 import win32gui
 import win32ui
-from PIL import Image, ImageGrab
+from PIL import Image, ImageDraw, ImageGrab
 
-from util import clicar_em, rolar_em
+from util import Button, Key, mouse, teclado, trazer_para_frente
 
 PORTA = 5008
 LARGURA, ALTURA = 400, 240
@@ -147,17 +154,56 @@ def ponto_na_janela(regiao, tamanho, u, v):
     return None
 
 
-def para_3ds(img, qualidade):
+def cursor_na_janela(hwnd):
+    """Onde está o cursor do mouse, em pixels da janela; None se está fora dela ou
+    escondido (jogos costumam esconder)."""
+    try:
+        flags, _, (x, y) = win32gui.GetCursorInfo()
+    except Exception:
+        return None
+    if not flags & 1:                         # CURSOR_SHOWING
+        return None
+    x0, y0, x1, y1 = win32gui.GetWindowRect(hwnd)
+    if x0 <= x < x1 and y0 <= y < y1:
+        return x - x0, y - y0
+    return None
+
+
+# seta do mouse (pontos em pixels da tela do 3DS)
+SETA = [(0, 0), (0, 15), (4, 11), (7, 17), (10, 16), (7, 10), (12, 10)]
+
+
+def desenhar_cursor(tela, x, y):
+    pontos = [(x + px, y + py) for px, py in SETA]
+    ImageDraw.Draw(tela).polygon(pontos, fill=(255, 255, 255), outline=(0, 0, 0))
+
+
+def para_3ds(img, qualidade, cursor=None):
+    """cursor: (x, y) em pixels de img, para desenhar a seta do mouse."""
     # aumenta ou diminui para caber em 400x240 (com zoom o recorte pode ser menor que a tela);
     # BILINEAR é bem mais rápido que LANCZOS e, em 400x240, fica igual
     escala = min(LARGURA / img.width, ALTURA / img.height)
     img = img.resize((max(1, round(img.width * escala)), max(1, round(img.height * escala))),
                      Image.BILINEAR)
     tela = Image.new("RGB", (LARGURA, ALTURA))
-    tela.paste(img, ((LARGURA - img.width) // 2, (ALTURA - img.height) // 2))
+    dx, dy = (LARGURA - img.width) // 2, (ALTURA - img.height) // 2
+    tela.paste(img, (dx, dy))
+    # a seta tem sempre o mesmo tamanho na tela do 3DS (encolhida junto com a imagem sumiria)
+    if cursor and 0 <= cursor[0] * escala < img.width and 0 <= cursor[1] * escala < img.height:
+        desenhar_cursor(tela, round(dx + cursor[0] * escala), round(dy + cursor[1] * escala))
     saida = io.BytesIO()
     tela.save(saida, "JPEG", quality=qualidade)
     return saida.getvalue()
+
+
+TECLAS = {"enter": Key.enter, "backspace": Key.backspace, "tab": Key.tab, "esc": Key.esc}
+
+
+def na_frente(hwnd):
+    """Traz a janela para a frente só se ela não estiver (e espera ela aparecer)."""
+    if user32.GetForegroundWindow() != hwnd:
+        trazer_para_frente(hwnd)
+        time.sleep(0.05)
 
 
 class Espelho:
@@ -190,7 +236,7 @@ class Espelho:
                 self.status.update(conectado=False, janela="")
 
     def _atender(self, conn):
-        conn.settimeout(30)
+        conn.settimeout(300)          # digitando no teclado do 3DS o pedido demora
         arquivo = conn.makefile("rb")
         lista, escolhida = [], None
         regiao, tamanho = None, None     # o que o último quadro mostrou (para o toque)
@@ -226,13 +272,16 @@ class Espelho:
                         img = capturar(escolhida)
                         if img:
                             tamanho = img.size
+                            cursor = cursor_na_janela(escolhida)
                             if zoom > 100:
                                 img, cx, cy, (x0, y0, x1, y1) = recortar(img, zoom, cx, cy)
                                 regiao = (x0, y0, x1 - x0, y1 - y0)
+                                if cursor:
+                                    cursor = (cursor[0] - x0, cursor[1] - y0)
                             else:
                                 cx, cy = 5000, 5000    # janela inteira: centro no meio
                                 regiao = regiao_inteira(*tamanho)
-                            jpeg = para_3ds(img, self.config["espelho"]["qualidade_jpeg"])
+                            jpeg = para_3ds(img, self.config["espelho"]["qualidade_jpeg"], cursor)
                     except Exception as e:
                         print("Espelho: erro ao capturar", e)
                 if not jpeg:
@@ -243,12 +292,14 @@ class Espelho:
                 else:
                     conn.sendall(b"3DSF" + struct.pack("<I", len(jpeg)) + jpeg)
 
-            elif cmd.startswith(("T ", "R ")):
-                # toque no 3DS: "T u v botao" = clique, "R u v passos" = rodinha.
-                # u, v de 0 a 10000 na imagem que o 3DS está mostrando. Sem resposta.
+            elif cmd.startswith(("T ", "R ", "M ")):
+                # toque no 3DS: "T u v botao" = clique, "R u v passos" = rodinha,
+                # "M u v" = só mover. u, v de 0 a 10000 na imagem que o 3DS está mostrando.
+                partes = cmd.split()
                 try:
-                    u, v, n = (int(p) for p in cmd.split()[1:4])
-                except ValueError:
+                    u, v = int(partes[1]), int(partes[2])
+                    n = int(partes[3]) if len(partes) > 3 else 0
+                except (ValueError, IndexError):
                     continue
                 if not (escolhida and regiao and win32gui.IsWindow(escolhida)):
                     continue
@@ -256,11 +307,30 @@ class Espelho:
                 if not ponto:
                     continue                       # tocou na faixa preta
                 esquerda, topo, _, _ = win32gui.GetWindowRect(escolhida)
-                x, y = esquerda + ponto[0], topo + ponto[1]
+                x, y = int(esquerda + ponto[0]), int(topo + ponto[1])
                 try:
+                    if cmd[0] == "M":
+                        user32.SetCursorPos(x, y)
+                        continue
+                    na_frente(escolhida)
+                    user32.SetCursorPos(x, y)
+                    time.sleep(0.01)
                     if cmd[0] == "T":
-                        clicar_em(x, y, 2 if n == 2 else 1, escolhida)
+                        mouse.click(Button.right if n == 2 else Button.left)
                     elif n:
-                        rolar_em(x, y, max(-10, min(10, n)), escolhida)
+                        mouse.scroll(0, max(-10, min(10, n)))
                 except Exception as e:
                     print("Espelho: erro no toque", e)
+
+            elif cmd.startswith(("K ", "E ")):
+                # teclado do 3DS: "K <texto em hex>" digita, "E <tecla>" aperta enter etc.
+                if not (escolhida and win32gui.IsWindow(escolhida)):
+                    continue
+                try:
+                    na_frente(escolhida)
+                    if cmd[0] == "K":
+                        teclado.type(bytes.fromhex(cmd[2:].strip()).decode("utf-8", "ignore"))
+                    elif cmd[2:].strip() in TECLAS:
+                        teclado.tap(TECLAS[cmd[2:].strip()])
+                except Exception as e:
+                    print("Espelho: erro no teclado", e)
