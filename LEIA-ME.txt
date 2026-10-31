@@ -137,7 +137,18 @@ LIGAR E SUSPENDER O PC PELO 3DS
   magico para ativar o computador". Se a aba "Avancado" tiver "Wake on
   Magic Packet" ou "WoWLAN", deixe ativado.
 
-O QUE MUDOU NESTA VERSAO (1.11.3)
+O QUE MUDOU NESTA VERSAO (1.11.4)
+- Karaoke acha a letra de muito mais musicas:
+  * Segunda fonte de letras: se o lrclib.net nao tiver a musica (ou
+    estiver fora do ar, o que tem acontecido bastante), o Hub procura no
+    NetEase Cloud Music.
+  * Se um site falhar, o Hub tenta de novo (30 s, 1, 2 e 4 min) enquanto
+    a musica toca, em vez de dizer "sem letra" ate reiniciar.
+  * Titulos do YouTube e do Spotify sao limpos melhor: canais "VEVO",
+    "ft./feat. Fulano", "Remastered 2011", "(Clipe Oficial)".
+- Atualize a pasta pc do PC (o 3DS nao muda).
+
+VERSAO 1.11.3
 - Acesso pela internet: quando o tunel da Cloudflare nao abre (redes que
   bloqueiam, como algumas de faculdade ou empresa), o Hub espera cada vez
   mais entre as tentativas (10 s, 20 s, 40 s... ate 3 min) em vez de

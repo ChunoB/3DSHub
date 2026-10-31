@@ -3,7 +3,8 @@
 - A música é qualquer uma tocando no PC (Spotify, YouTube no navegador...): o nome, o
   artista e em que ponto ela está vêm do Windows (os mesmos controles de mídia da
   Segunda Tela).
-- A letra sincronizada vem do lrclib.net (grátis, sem cadastro), uma vez por música.
+- A letra sincronizada vem do lrclib.net ou, se lá não tiver (ou o site estiver fora do
+  ar), do NetEase Cloud Music. Grátis, sem cadastro, uma vez por música.
 - A nota: o 3DS descobre a nota que você está cantando (microfone) e manda só ela. O PC
   ouve o som que está tocando (loopback), vê quais notas a música está tocando agora
   (cromagrama) e compara. Oitava não importa: cantar uma oitava abaixo vale igual.
@@ -26,6 +27,7 @@ import socket
 import struct
 import threading
 import time
+import unicodedata
 import urllib.parse
 import urllib.request
 import warnings
@@ -47,42 +49,113 @@ TAXA = 22050
 PEDACO = 900                              # bytes de letra por pacote
 
 
+LIXO_TITULO = (r"official|oficial|video|vídeo|lyric|letra|audio|áudio|clipe|ao vivo|live|hd|4k|"
+               r"remaster|visualizer|\bmv\b")
+
+
+def normalizar(s):
+    """Para comparar nomes: sem acento, sem espaço e pontuação, minúsculo."""
+    s = unicodedata.normalize("NFKD", s or "")
+    return "".join(c for c in s if c.isalnum()).lower()
+
+
 def limpar_titulo(titulo, artista):
-    """Títulos do YouTube vêm como "Artista - Música (Official Video)"."""
-    t = re.sub(r"[\(\[][^\)\]]*(official|video|lyric|audio|clipe|ao vivo|live|hd|4k)[^\)\]]*[\)\]]", "",
-               titulo, flags=re.I).strip()
-    if " - " in t and (not artista or artista.lower() in t.lower() or "topic" in artista.lower()):
-        a, t = t.split(" - ", 1)
-        artista = a.strip()
-    artista = re.sub(r"\s*-\s*topic$", "", artista or "", flags=re.I)
-    return t.strip(), artista.strip()
+    """Deixa só "música" e "artista". Títulos do YouTube e do Spotify vêm com sobras:
+    "Artista - Música (Official Video)", "Música - Remastered 2011", "Música ft. Fulano",
+    e o artista às vezes é o canal ("ArtistaVEVO", "Artista - Topic")."""
+    t = re.sub(r"[\(\[][^\)\]]*(" + LIXO_TITULO + r")[^\)\]]*[\)\]]", "", titulo or "", flags=re.I)
+    t = re.sub(r"\s+-\s+[^-]*\b(remaster\w*|ao vivo|live|version|versão|edit)\b[^-]*$", "", t, flags=re.I)
+    a = re.sub(r"\s*(-\s*topic|vevo|official|oficial)$", "", (artista or "").strip(), flags=re.I)
+    if " - " in t:
+        esq, dir_ = (x.strip() for x in t.split(" - ", 1))
+        na, ne = normalizar(a), normalizar(esq)
+        if not na or (ne and (na in ne or ne in na)):    # "Artista - Música" postado pelo artista
+            a, t = esq, dir_
+    t = re.sub(r"\s*[\(\[]\s*(ft|feat|featuring)\b[^\)\]]*[\)\]]", "", t, flags=re.I)   # "(feat. Fulano)"
+    t = re.sub(r"\s+(ft|feat|featuring)\b\.?\s.*$", "", t, flags=re.I)                    # " ft. Fulano"
+    return " ".join(t.split()), " ".join(a.split())
 
 
-def buscar_letra(titulo, artista, duracao_s):
-    """[(ms, linha)] da letra sincronizada, ou [] se não achar."""
-    t, a = limpar_titulo(titulo, artista)
-    tentativas = [{"track_name": t, "artist_name": a}, {"q": f"{a} {t}".strip()}, {"q": t}]
-    for params in tentativas:
-        try:
-            url = "https://lrclib.net/api/search?" + urllib.parse.urlencode(params)
-            req = urllib.request.Request(url, headers={"User-Agent": "3DSHub (github.com/ChunoB/3DSHub)"})
-            with urllib.request.urlopen(req, timeout=8, context=SSL) as r:
-                resultados = json.load(r)
-        except Exception as e:
-            print("Karaokê: erro ao buscar a letra", repr(e))
+def _json(url, cabecalhos):
+    req = urllib.request.Request(url, headers=cabecalhos)
+    with urllib.request.urlopen(req, timeout=8, context=SSL) as r:
+        return json.load(r)
+
+
+def ler_lrc(lrc):
+    """Texto LRC ("[01:02.50]linha") -> [(ms, linha)]. Aceita várias marcas na mesma linha
+    e pula os créditos em chinês que o NetEase põe no começo (作词 : ...)."""
+    linhas = []
+    for linha in (lrc or "").splitlines():
+        marcas = re.findall(r"\[(\d+):(\d+(?:\.\d+)?)\]", linha)
+        resto = re.sub(r"\[[^\]]*\]", "", linha).strip()
+        if re.match(r"^[一-鿿 ]+[:：]", resto):
             continue
+        for m, s in marcas:
+            linhas.append((int((int(m) * 60 + float(s)) * 1000), texto(resto, 60)))
+    linhas.sort()
+    return linhas if sum(1 for _, l in linhas if l) >= 5 else []
+
+
+def _lrclib(t, a, duracao_s):
+    cab = {"User-Agent": "3DSHub (github.com/ChunoB/3DSHub)"}
+    for params in ({"track_name": t, "artist_name": a}, {"q": f"{a} {t}".strip()}, {"q": t}):
+        resultados = _json("https://lrclib.net/api/search?" + urllib.parse.urlencode(params), cab)
         com_letra = [x for x in resultados if x.get("syncedLyrics")]
         if duracao_s:                     # a versão com a duração mais parecida
             com_letra.sort(key=lambda x: abs((x.get("duration") or 0) - duracao_s))
-        if com_letra:
-            linhas = []
-            for linha in com_letra[0]["syncedLyrics"].splitlines():
-                for m, s, resto in re.findall(r"\[(\d+):(\d+(?:\.\d+)?)\](.*)", linha):
-                    linhas.append((int((int(m) * 60 + float(s)) * 1000), texto(resto.strip(), 60)))
-            linhas.sort()
+        for x in com_letra[:3]:
+            linhas = ler_lrc(x["syncedLyrics"])
             if linhas:
                 return linhas
     return []
+
+
+def _netease(t, a, duracao_s):
+    """NetEase Cloud Music: catálogo grande, com muita música ocidental e brasileira."""
+    cab = {"User-Agent": "Mozilla/5.0", "Referer": "https://music.163.com/"}
+    r = _json("https://music.163.com/api/search/get?" +
+              urllib.parse.urlencode({"s": f"{t} {a}".strip(), "type": 1, "limit": 10}), cab)
+    nt, na = normalizar(t), normalizar(a)
+
+    def confere(s):                       # mesmo nome e mesmo artista (não um cover)
+        nome = normalizar(s.get("name"))
+        artistas = [normalizar(x.get("name")) for x in s.get("artists") or []]
+        return (nome and (nt in nome or nome in nt)) and \
+               (not na or any(x and (x in na or na in x) for x in artistas))
+
+    musicas = [s for s in (r.get("result") or {}).get("songs") or [] if confere(s)]
+    if duracao_s:
+        musicas.sort(key=lambda s: abs((s.get("duration") or 0) / 1000 - duracao_s))
+    for s in musicas[:3]:
+        letra = _json(f"https://music.163.com/api/song/lyric?id={s['id']}&lv=1", cab)
+        linhas = ler_lrc((letra.get("lrc") or {}).get("lyric"))
+        if linhas:
+            return linhas
+    return []
+
+
+FONTES = (("lrclib", _lrclib), ("NetEase", _netease))
+
+
+def buscar_letra(titulo, artista, duracao_s):
+    """[(ms, linha)] da letra sincronizada; [] se nenhuma fonte tem; None se alguma fonte
+    deu erro (site fora do ar, sem internet) e vale tentar de novo daqui a pouco."""
+    t, a = limpar_titulo(titulo, artista)
+    if not t:
+        return []
+    erro = False
+    for nome, fonte in FONTES:
+        try:
+            linhas = fonte(t, a, duracao_s)
+        except Exception as e:
+            print(f"Karaokê: {nome} falhou ({e!r})")
+            erro = True
+            continue
+        if linhas:
+            print(f"Karaokê: letra de {t} - {a} achada no {nome}")
+            return linhas
+    return None if erro else []
 
 
 class MidiaComTempo:
@@ -167,6 +240,7 @@ class Karaoke:
         self.ouvido = Ouvido()
         self.musica = None                  # (título, artista, tocando, posição, duração, quando)
         self.letras = {}                    # id -> [(ms, linha)] (None = buscando)
+        self.reprocurar = {}                # id -> (tentativas, quando buscar de novo; 0 = não)
         self.pontos, self.acerto = 0, 0
         self.ultimo_3ds = 0.0
         self.ultimo_ponto = time.monotonic()
@@ -193,12 +267,27 @@ class Karaoke:
             self.musica = (*m, time.monotonic()) if m else None
             if m and m[0]:
                 ident = self.id_musica(m[0], m[1])
+                tentativas, quando = self.reprocurar.get(ident, (0, 0.0))
                 if ident not in self.letras:
-                    self.letras[ident] = None
-                    print(f"Karaokê: buscando a letra de {m[0]} - {m[1]}")
-                    threading.Thread(target=lambda: self.letras.__setitem__(ident, buscar_letra(m[0], m[1], m[4])),
-                                     daemon=True).start()
                     self.pontos = 0                    # música nova: placar novo
+                    self._procurar(ident, m, 0)
+                elif quando and time.monotonic() > quando:
+                    self._procurar(ident, m, tentativas)
+
+    def _procurar(self, ident, m, tentativas):
+        """Busca a letra numa thread. Se um site falhou (fora do ar, sem internet), tenta de
+        novo em 30 s, 1, 2 e 4 min enquanto a música tocar, em vez de ficar "sem letra"."""
+        self.letras[ident] = None
+        self.reprocurar[ident] = (tentativas, 0.0)
+        print(f"Karaokê: {'buscando' if not tentativas else 'tentando de novo'} a letra de {m[0]} - {m[1]}")
+
+        def trabalho():
+            linhas = buscar_letra(m[0], m[1], m[4])
+            if linhas is None and tentativas < 4:
+                self.reprocurar[ident] = (tentativas + 1, time.monotonic() + 30 * 2 ** tentativas)
+            self.letras[ident] = linhas or []
+
+        threading.Thread(target=trabalho, daemon=True).start()
 
     def _nota_da_voz(self, freq_dhz, volume):
         """Atualiza acerto e pontos com a voz que chegou. Devolve a nota da música."""
