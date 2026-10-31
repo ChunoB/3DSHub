@@ -137,7 +137,20 @@ LIGAR E SUSPENDER O PC PELO 3DS
   magico para ativar o computador". Se a aba "Avancado" tiver "Wake on
   Magic Packet" ou "WoWLAN", deixe ativado.
 
-O QUE MUDOU NESTA VERSAO (1.11.4)
+O QUE MUDOU NESTA VERSAO (1.11.5)
+- Karaoke acha ainda mais letras (testado com 115 musicas: 83% acharam,
+  todas as internacionais):
+  * No NetEase a mesma musica aparece varias vezes e as vezes so uma
+    copia tem a letra: o Hub olha varias, prefere a de nome igual (nao a
+    "ao vivo") e busca de novo sem acento.
+  * Musicas com varios artistas ("Anitta, MC Zaac, ...") e duplas com
+    "&" ou "e" sao reconhecidas. Titulos com travessao e "M/V" tambem.
+  * Canal que nao e o artista (ex.: KondZilla): o Hub entende "Artista -
+    Musica" no titulo.
+  * Pot-pourri ("Musica A / Musica B") nao passa mais por "Musica A".
+- Atualize a pasta pc do PC (o 3DS nao muda).
+
+VERSAO 1.11.4
 - Karaoke acha a letra de muito mais musicas:
   * Segunda fonte de letras: se o lrclib.net nao tiver a musica (ou
     estiver fora do ar, o que tem acontecido bastante), o Hub procura no

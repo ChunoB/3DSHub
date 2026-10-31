@@ -50,20 +50,39 @@ PEDACO = 900                              # bytes de letra por pacote
 
 
 LIXO_TITULO = (r"official|oficial|video|vídeo|lyric|letra|audio|áudio|clipe|ao vivo|live|hd|4k|"
-               r"remaster|visualizer|\bmv\b")
+               r"remaster|visualizer|\bmv\b|\bdvd\b|kondzilla")
+
+
+def sem_acento(s):
+    return "".join(c for c in unicodedata.normalize("NFKD", s or "") if not unicodedata.combining(c))
 
 
 def normalizar(s):
-    """Para comparar nomes: sem acento, sem espaço e pontuação, minúsculo."""
-    s = unicodedata.normalize("NFKD", s or "")
-    return "".join(c for c in s if c.isalnum()).lower()
+    """Para comparar nomes: sem acento, sem espaço e pontuação, minúsculo, e "&" = "e" = "and"
+    ("Henrique & Juliano" e "Henrique e Juliano" ficam iguais)."""
+    s = re.sub(r"(^|\W)(&|e|and|y)(?=\W|$)", " ", sem_acento(s).lower())
+    return "".join(c for c in s if c.isalnum())
+
+
+def nomes_de(nome):
+    """O nome inteiro e o nome sem "(Ao Vivo)", "[Remix]" ou "- Remastered" (normalizados):
+    "Infiel (Ao Vivo)" vale como "Infiel", mas "Infiel / Amante Não Tem Lar" não."""
+    base = re.sub(r"\s*[\(\[][^\)\]]*[\)\]]|\s+-\s.*$", "", nome or "")
+    return {x for x in (normalizar(nome), normalizar(base)) if x}
+
+
+def artistas_de(a):
+    """"Anitta, MC Zaac feat. Fulano" -> ["Anitta", "MC Zaac", "Fulano"] ("&" fica: é dupla)."""
+    return [x.strip() for x in re.split(r",|\b(?:feat|ft|featuring)\b\.?", a or "", flags=re.I) if x.strip()]
 
 
 def limpar_titulo(titulo, artista):
     """Deixa só "música" e "artista". Títulos do YouTube e do Spotify vêm com sobras:
     "Artista - Música (Official Video)", "Música - Remastered 2011", "Música ft. Fulano",
     e o artista às vezes é o canal ("ArtistaVEVO", "Artista - Topic")."""
-    t = re.sub(r"[\(\[][^\)\]]*(" + LIXO_TITULO + r")[^\)\]]*[\)\]]", "", titulo or "", flags=re.I)
+    t = re.sub(r"\s+[–—]\s+", " - ", titulo or "")                    # travessão = hífen
+    t = re.sub(r"[\(\[][^\)\]]*(" + LIXO_TITULO + r")[^\)\]]*[\)\]]", "", t, flags=re.I)
+    t = re.sub(r"\s+M/?V\.?$", "", t, flags=re.I)                     # "Música M/V"
     t = re.sub(r"\s+-\s+[^-]*\b(remaster\w*|ao vivo|live|version|versão|edit)\b[^-]*$", "", t, flags=re.I)
     a = re.sub(r"\s*(-\s*topic|vevo|official|oficial)$", "", (artista or "").strip(), flags=re.I)
     if " - " in t:
@@ -99,6 +118,7 @@ def ler_lrc(lrc):
 
 def _lrclib(t, a, duracao_s):
     cab = {"User-Agent": "3DSHub (github.com/ChunoB/3DSHub)"}
+    a = (artistas_de(a) or [""])[0]       # só o artista principal: a lista toda atrapalha a busca
     for params in ({"track_name": t, "artist_name": a}, {"q": f"{a} {t}".strip()}, {"q": t}):
         resultados = _json("https://lrclib.net/api/search?" + urllib.parse.urlencode(params), cab)
         com_letra = [x for x in resultados if x.get("syncedLyrics")]
@@ -112,26 +132,37 @@ def _lrclib(t, a, duracao_s):
 
 
 def _netease(t, a, duracao_s):
-    """NetEase Cloud Music: catálogo grande, com muita música ocidental e brasileira."""
+    """NetEase Cloud Music: catálogo grande, com muita música ocidental e brasileira.
+    A mesma música aparece várias vezes lá (álbum, coletânea, ao vivo) e muitas vezes só uma
+    das cópias tem a letra sincronizada: olha várias, a de nome igual primeiro, e busca de novo
+    sem acento (as cópias sem acento costumam ser outras)."""
     cab = {"User-Agent": "Mozilla/5.0", "Referer": "https://music.163.com/"}
-    r = _json("https://music.163.com/api/search/get?" +
-              urllib.parse.urlencode({"s": f"{t} {a}".strip(), "type": 1, "limit": 10}), cab)
-    nt, na = normalizar(t), normalizar(a)
+    nt = normalizar(t)
+    nomes_t = nomes_de(t)
+    pedidos = [normalizar(x) for x in artistas_de(a)]
+    principal = (artistas_de(a) or [""])[0]
 
-    def confere(s):                       # mesmo nome e mesmo artista (não um cover)
-        nome = normalizar(s.get("name"))
+    def confere(s):                       # mesmo nome e um dos artistas (não um cover nem pot-pourri)
         artistas = [normalizar(x.get("name")) for x in s.get("artists") or []]
-        return (nome and (nt in nome or nome in nt)) and \
-               (not na or any(x and (x in na or na in x) for x in artistas))
+        return bool(nomes_t & nomes_de(s.get("name"))) and \
+               (not pedidos or any(x and p and (x in p or p in x) for x in artistas for p in pedidos))
 
-    musicas = [s for s in (r.get("result") or {}).get("songs") or [] if confere(s)]
-    if duracao_s:
-        musicas.sort(key=lambda s: abs((s.get("duration") or 0) / 1000 - duracao_s))
-    for s in musicas[:3]:
-        letra = _json(f"https://music.163.com/api/song/lyric?id={s['id']}&lv=1", cab)
-        linhas = ler_lrc((letra.get("lrc") or {}).get("lyric"))
-        if linhas:
-            return linhas
+    def ordem(s):                         # nome igual (não "ao vivo", "remix"), depois a duração
+        return (normalizar(s.get("name")) != nt,
+                abs((s.get("duration") or 0) / 1000 - duracao_s) if duracao_s else 0)
+
+    busca = f"{t} {principal}".strip()
+    vistos = set()
+    for q in dict.fromkeys((busca, sem_acento(busca))):
+        r = _json("https://music.163.com/api/search/get?" +
+                  urllib.parse.urlencode({"s": q, "type": 1, "limit": 20}), cab)
+        musicas = [s for s in (r.get("result") or {}).get("songs") or [] if s["id"] not in vistos and confere(s)]
+        vistos.update(s["id"] for s in musicas)
+        for s in sorted(musicas, key=ordem)[:6]:
+            letra = _json(f"https://music.163.com/api/song/lyric?id={s['id']}&lv=1", cab)
+            linhas = ler_lrc((letra.get("lrc") or {}).get("lyric"))
+            if linhas:
+                return linhas
     return []
 
 
@@ -144,17 +175,22 @@ def buscar_letra(titulo, artista, duracao_s):
     t, a = limpar_titulo(titulo, artista)
     if not t:
         return []
+    pares = [(t, a)]
+    if " - " in t:                        # "Artista - Música" postado por um canal (ex.: KondZilla)
+        esq, dir_ = (x.strip() for x in t.split(" - ", 1))
+        pares.append((dir_, esq))
     erro = False
     for nome, fonte in FONTES:
-        try:
-            linhas = fonte(t, a, duracao_s)
-        except Exception as e:
-            print(f"Karaokê: {nome} falhou ({e!r})")
-            erro = True
-            continue
-        if linhas:
-            print(f"Karaokê: letra de {t} - {a} achada no {nome}")
-            return linhas
+        for t, a in pares:
+            try:
+                linhas = fonte(t, a, duracao_s)
+            except Exception as e:
+                print(f"Karaokê: {nome} falhou ({e!r})")
+                erro = True
+                break                     # o site está com problema: não adianta a outra forma
+            if linhas:
+                print(f"Karaokê: letra de {t} - {a} achada no {nome}")
+                return linhas
     return None if erro else []
 
 
