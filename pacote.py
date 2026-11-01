@@ -12,7 +12,7 @@ with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as z:
         z.write(os.path.join(raiz, "3ds", nome), f"3dshub/{nome}")
     z.write(os.path.join(raiz, "LEIA-ME.txt"), "3dshub/LEIA-ME.txt")
     for pasta, subs, arquivos in os.walk(os.path.join(raiz, "pc")):
-        subs[:] = [s for s in subs if s != "__pycache__"]
+        subs[:] = [s for s in subs if s not in ("__pycache__", "karaoke", "capas", "bicho")]   # dados do PC: não vão
         for a in arquivos:
             cheio = os.path.join(pasta, a)
             z.write(cheio, "3dshub/" + os.path.relpath(cheio, raiz).replace("\\", "/"))

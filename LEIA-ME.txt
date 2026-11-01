@@ -137,7 +137,39 @@ LIGAR E SUSPENDER O PC PELO 3DS
   magico para ativar o computador". Se a aba "Avancado" tiver "Wake on
   Magic Packet" ou "WoWLAN", deixe ativado.
 
-O QUE MUDOU NESTA VERSAO (1.11.5)
+O QUE MUDOU NESTA VERSAO (1.12.0)
+- Karaoke virou jogo:
+  * Faixa de notas na tela de baixo, como no Guitar Hero: as 12 notas (Do
+    embaixo, Si em cima; oitava nao importa), as notas da musica vindo ate
+    a linha e a sua voz em amarelo.
+  * Na 1a vez que uma musica toca, o PC grava as notas dela (a faixa
+    mostra os trechos com letra e as notas aparecem quando soam). Da 2a vez
+    em diante, as notas gravadas vem pela faixa antes de tocar.
+  * Cada nota vale Perfeito / Otimo / Bom / Errou. Combo sobe o
+    multiplicador (ate x4) e enche o Turbo: com ele cheio, A dobra os
+    pontos por 10 s.
+  * Tres niveis (L/R ou o botao do meio no menu): Facil (meio tom fora
+    ainda vale), Normal e Dificil (so a nota exata). No Facil e no Normal,
+    cantar qualquer nota que esteja soando forte na musica tambem vale.
+  * So os trechos com letra valem: as notas das partes instrumentais
+    aparecem em cinza e ficar calado nelas nao tira ponto. Musica sem letra
+    encontrada: so contam as notas em que voce canta.
+  * A deteccao da voz ignora a musica que vaza das caixas para o
+    microfone (para de inventar nota quando voce esta calado) e o rastro
+    amarelo treme menos. Com fone de ouvido no PC fica ainda melhor.
+  * Letra longa quebra em ate 3 linhas, sem cortar com "...".
+  * Perfis com nome, cor, XP e nivel (o teclado do 3DS cria). Jogue
+    sozinho ou de 1 a 4 passando o 3DS: acabou a vez, a mesma musica
+    recomeca sozinha no PC para o proximo, e no fim sai o ranking.
+  * Resultado com estrelas, afinacao, maior combo e "Novo recorde!".
+    Recordes (top 5 de cada musica) ficam salvos no PC.
+  * X recomeca a musica, R pula para a proxima, SELECT encerra a vez,
+    START volta ao menu. Pausou a musica no PC, tudo para no 3DS.
+- Perfis, recordes e as notas gravadas ficam em pc\karaoke (copie essa
+  pasta junto se trocar de PC).
+- Atualize o app do 3DS e a pasta pc do PC.
+
+VERSAO 1.11.5
 - Karaoke acha ainda mais letras (testado com 115 musicas: 83% acharam,
   todas as internacionais):
   * No NetEase a mesma musica aparece varias vezes e as vezes so uma

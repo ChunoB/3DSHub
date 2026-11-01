@@ -39,7 +39,8 @@ ESTRUTURA
                           (os botoes vao pelo Controle, porta 5005)
   pc\bicho.py             porta 5014 (UDP) - o que o PC esta fazendo + skin do Bichinho
   pc\pesca.py             porta 5015 (UDP) - o jogo da Pescaria e a janela do lago (tkinter)
-  pc\karaoke.py           porta 5016 (UDP) - musica tocando, letra (lrclib.net) e nota
+  pc\karaoke.py           porta 5016 (UDP) - musica tocando, letra (lrclib.net / NetEase), faixa de
+                          notas gravadas, julgamento, perfis e recordes (pasta pc\karaoke)
   pc\som.py               porta 5013 (UDP) - o som do PC (loopback) compactado para o 3DS
   pc\util.py              teclado/mouse, cliques, IPs do PC
 

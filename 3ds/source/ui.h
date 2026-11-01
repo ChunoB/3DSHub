@@ -70,6 +70,8 @@ enum { ESQ, CENTRO, DIR };
 // larguraMax > 0 corta com "..." se não couber. Retorna a largura desenhada.
 float uiTexto(float x, float y, float tamanho, u32 cor, int alinhamento, float larguraMax,
               const char *fmt, ...) __attribute__((format(printf, 7, 8)));
+// Largura que o texto teria nesse tamanho (só mede, não desenha).
+float uiLarguraTexto(const char *s, float tamanho);
 
 // ---------------------------------------------------------------- ícones
 enum {

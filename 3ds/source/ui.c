@@ -176,6 +176,19 @@ float uiTexto(float x, float y, float tamanho, u32 cor, int alinhamento, float l
     return w;
 }
 
+float uiLarguraTexto(const char *s, float tamanho) {
+    float escala = tamanho / alturaLinha, w = 0;
+    const u8 *p = (const u8 *)s;
+    while (*p) {
+        u32 codigo;
+        ssize_t n = decode_utf8(&codigo, p);
+        if (n <= 0) break;
+        w += larguraCaractere(codigo, escala);
+        p += n;
+    }
+    return w;
+}
+
 // ---------------------------------------------------------------- ícones
 // Desenhados numa grade de 24x24 (u = 1/24 do tamanho), centrados em (cx, cy).
 
