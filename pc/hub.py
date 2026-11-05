@@ -35,6 +35,16 @@ if sys.stdout is None or not sys.stdout.isatty():
     sys.stdout = sys.stderr = open(LOG, "a", encoding="utf-8", buffering=1, errors="replace")
 print(f"\n===== 3DS Hub iniciando {time.strftime('%d/%m/%Y %H:%M:%S')} =====")
 
+# Só um Hub por vez. Ao entrar no Windows, o vigia e o atalho "Iniciar com o Windows"
+# abriam um Hub cada; o segundo ficava sem as portas e todos os serviços dele davam
+# erro. A trava é um "mutex" do Windows com nome: some sozinha quando o Hub fecha.
+_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_kernel32.CreateMutexW.restype = ctypes.c_void_p
+_TRAVA = _kernel32.CreateMutexW(None, False, "Local\\3DSHub-PC")
+if _TRAVA and ctypes.get_last_error() == 183:     # ERROR_ALREADY_EXISTS
+    print("Outro 3DS Hub já está aberto neste PC: este fecha sem fazer nada.")
+    sys.exit(0)
+
 import pystray                                   # noqa: E402
 from PIL import Image, ImageDraw                 # noqa: E402
 

@@ -162,7 +162,17 @@ LIGAR E SUSPENDER O PC PELO 3DS
   magico para ativar o computador". Se a aba "Avancado" tiver "Wake on
   Magic Packet" ou "WoWLAN", deixe ativado.
 
-O QUE MUDOU NESTA VERSAO (1.12.0)
+O QUE MUDOU NESTA VERSAO (1.13.1)
+- PC: o Hub nao abre mais duas vezes. Ao entrar no Windows o vigia e o
+  atalho "Iniciar com o Windows" abriam um Hub cada; o segundo ficava sem
+  as portas, com todos os servicos em erro, e o 3DS podia nao achar o PC.
+  Agora o segundo percebe o primeiro e fecha sozinho.
+- Atualize a pasta pc do PC (o 3DS nao muda).
+
+VERSAO 1.13.0
+- O celular Android no lugar do PC (veja "NO CELULAR" acima).
+
+VERSAO 1.12.0
 - Karaoke virou jogo:
   * Faixa de notas na tela de baixo, como no Guitar Hero: as 12 notas (Do
     embaixo, Si em cima; oitava nao importa), as notas da musica vindo ate
