@@ -2,7 +2,8 @@
 // Do outro lado pode estar o PC (pasta pc) ou o celular (pasta android): o celular
 // responde nas mesmas portas, e os módulos que ele ainda não tem avisam isso.
 //
-// Menu: cruz ou toque = escolher, A = abrir, Y = Ajustes, START = sair
+// Menu: cruz ou toque = escolher, A = abrir, Y = Ajustes, SELECT = escolher o PC ou
+// celular, START duas vezes = sair
 //
 // O menu procura o PC sozinho (descoberta na rede) sempre que o Hub não responde.
 
@@ -84,6 +85,7 @@ static u64 ultimaRespostaHub;
 static int descoberta = -1;
 static char aviso[64];          // "PC encontrado: ..." por alguns segundos
 static u64 avisoAte;
+static bool outroNaRede;        // o aparelho escolhido não responde, mas há outro na rede
 static bool hubRespondendo(void);
 
 static void abrirSonda(void) {
@@ -165,12 +167,13 @@ static bool hubRespondendo(void) {
 // ---------------------------------------------------------------- descoberta
 
 
-// Pergunta de vez em quando quem é o 3DS Hub da rede. Só troca de PC sozinho
-// quando o PC atual não responde (ou ainda não tem IP): assim, com dois PCs
-// na mesma rede, ele não fica pulando de um para o outro.
+// Pergunta de vez em quando quem é o 3DS Hub da rede. O 3DS fica com o aparelho
+// escolhido (PC ou celular): só pega um sozinho quando ainda não tem nenhum, e só
+// segue o mesmo aparelho se o IP dele mudou. Trocar de aparelho é com SELECT.
 static void rodarDescoberta(u32 quadro) {
     if (descoberta < 0) return;
     bool hubOk = hubRespondendo();
+    if (hubOk) outroNaRede = false;
     if (quadro % 120 == 30 && (!hubOk || modoRemoto || !ipPC[0] || !nomePC[0])) descobertaPerguntar(descoberta);
 
     char ip[32], nome[32];
@@ -188,20 +191,25 @@ static void rodarDescoberta(u32 quadro) {
             snprintf(aviso, sizeof(aviso), "PC na mesma rede: conexão direta");
             avisoAte = osGetTime() + 4000;
         } else if (!strcmp(ip, ipPC)) {
-            snprintf(nomePC, sizeof(nomePC), "%s", nome);   // o mesmo PC: só aprende o nome
-        } else if (!ipPC[0] || !hubOk) {
+            snprintf(nomePC, sizeof(nomePC), "%s", nome);   // o mesmo aparelho: só aprende o nome
+        } else if (!ipPC[0] || (!hubOk && (!nomePC[0] || !strcmp(nome, nomePC)))) {
+            // primeiro aparelho, IP digitado que não responde, ou o escolhido com IP novo
             fecharSonda();
             definirIP(ip);
             snprintf(nomePC, sizeof(nomePC), "%s", nome);
             ultimaRespostaHub = 0;
             abrirSonda();
-            snprintf(aviso, sizeof(aviso), "PC encontrado: %s", nome);
+            snprintf(aviso, sizeof(aviso), "Encontrado: %s", nome);
             avisoAte = osGetTime() + 4000;
+        } else if (!hubOk) {
+            outroNaRede = true;      // não troca sozinho: o menu sugere o SELECT
         }
     }
 }
 
 // ---------------------------------------------------------------- desenho
+
+static u64 confirmarSaidaAte;   // primeiro START: pede o segundo para sair
 
 static void desenharMenu(int sel, bool temIP) {
     const Item *it = &itens[sel];
@@ -220,10 +228,18 @@ static void desenharMenu(int sel, bool temIP) {
     }
     uiTexto(16, 114, 13, COR_TEXTO2, ESQ, 0, "%s", it->descricao);
 
-    if (osGetTime() < avisoAte) {
+    if (osGetTime() < confirmarSaidaAte) {
+        uiRetArred(16, 166, 368, 28, 10, COR_CARTAO2);
+        uiTexto(200, 172, 13, COR_TEXTO, CENTRO, 340, "Aperte START de novo para sair do 3DS Hub");
+    } else if (osGetTime() < avisoAte) {
         uiRetArred(16, 166, 368, 28, 10, HEX(0x085041));
         uiIcone(IC_OK, 32, 180, 14, COR_AGUA_CL, HEX(0x085041));
         uiTexto(46, 172, 13, COR_AGUA_CL, ESQ, 330, "%s", aviso);
+    } else if (outroNaRede && temIP) {
+        uiRetArred(16, 166, 368, 28, 10, HEX(0x4A3410));
+        uiTexto(200, 172, 13, COR_AMARELO, CENTRO, 340, "Não responde. SELECT escolhe outro aparelho");
+    } else {
+        uiTexto(384, 184, 11, COR_MUDO, DIR, 0, "SELECT: trocar de PC ou celular");
     }
 
     // rodapé: qual PC e se o Hub respondeu
@@ -276,14 +292,35 @@ int main(int argc, char **argv) {
     int sel = 0;
     u32 quadro = 0;
     bool temIP = false;
+    bool esperarSoltarStart = false;    // o START que fechou um módulo ainda está apertado
 
     while (aptMainLoop() && !sairDoApp) {
         hidScanInput();
         u32 down = hidKeysDown();
         int abrir = -1;
 
-        // apertouStart: START durante uma conexão pela internet (que segura o menu)
-        if ((down & KEY_START) || apertouStart) break;
+        if (esperarSoltarStart) {
+            if (hidKeysHeld() & KEY_START) down &= ~KEY_START;
+            else esperarSoltarStart = false;
+        }
+        // sair pede dois toques no START. apertouStart: START durante uma espera da
+        // conexão pela internet (que segura o menu) conta como o primeiro toque.
+        if ((down & KEY_START) || apertouStart) {
+            apertouStart = false;
+            if (osGetTime() < confirmarSaidaAte) break;
+            confirmarSaidaAte = osGetTime() + 2500;
+        }
+        if ((down & KEY_SELECT) && rede) {
+            escolherAparelho();
+            if (aptShouldClose()) break;
+            fecharSondaDeVez();
+            ultimaRespostaHub = 0;
+            outroNaRede = false;
+            redeMudou = false;
+            if (modoRemoto) mensagemRapida("Conectando pela internet...", nomePC);
+            abrirSonda();
+            esperarSoltarStart = true;
+        }
         if (down & KEY_DLEFT)  sel = sel % 2 ? sel - 1 : sel;
         if (down & KEY_DRIGHT) sel = sel % 2 || sel + 1 >= N_ITENS ? sel : sel + 1;
         if (down & KEY_DUP)    sel = sel >= 2 ? sel - 2 : sel;
@@ -332,6 +369,7 @@ int main(int argc, char **argv) {
                 it->abrir();
                 if (aptShouldClose()) break;   // fechado pelo HOME dentro do módulo: sai já
                 apertouStart = false;       // o START dentro do módulo era para sair dele
+                esperarSoltarStart = true;
                 ultimaRespostaHub = 0;
                 if (redeMudou) {            // nos Ajustes escolheu outro PC (ou casa/internet)
                     redeMudou = false;

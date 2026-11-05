@@ -32,6 +32,7 @@ typedef struct {
     char atalhos[400];
     int  cpu, gpu, ram, disco, down, up, bat, carg, vol, mudo, tocando, redemax;
     int  celular, somCel;      // do celular: é um celular / a captura do som está liberada lá
+    int  bloqueado;            // o app tocando no celular proíbe a captura do som (ex.: Spotify)
 } Dados;
 
 static char nomesAtalho[9][48];
@@ -56,6 +57,7 @@ static void lerDados(char *buf, Dados *d) {
         NUMERO(bat) NUMERO(carg) NUMERO(vol) NUMERO(mudo) NUMERO(tocando) NUMERO(redemax)
         if (!strcmp(k, "celular")) { d->celular = atoi(v); continue; }
         if (!strcmp(k, "som")) { d->somCel = atoi(v); continue; }
+        if (!strcmp(k, "bloqueado")) { d->bloqueado = atoi(v); continue; }
         #undef TEXTO
         #undef NUMERO
     }
@@ -143,6 +145,10 @@ static void desenharCimaCelular(const Dados *d, bool conectado) {
     if (!somLigado()) {
         uiTexto(20, 162, 16, COR_TEXTO2, ESQ, 165, "Desligado");
         uiTexto(20, 184, 11, COR_MUDO, ESQ, 165, "X liga");
+    } else if (conectado && d->bloqueado) {
+        uiTexto(20, 160, 13, COR_AMARELO, ESQ, 165, "Este app não deixa");
+        uiTexto(20, 178, 11, COR_MUDO, ESQ, 165, "mandar o som dele.");
+        uiTexto(20, 191, 11, COR_MUDO, ESQ, 165, "Ele toca só no celular.");
     } else if (somChegando()) {
         uiTexto(20, 162, 16, COR_AGUA_CL, ESQ, 165, "Tocando aqui");
         uiTexto(20, 184, 11, COR_MUDO, ESQ, 165, "X desliga");

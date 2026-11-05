@@ -2,7 +2,9 @@ package io.github.chunob.hub3ds;
 
 import android.content.ComponentName;
 import android.content.Context;
+import android.media.AudioAttributes;
 import android.media.AudioManager;
+import android.media.AudioPlaybackConfiguration;
 import android.media.MediaMetadata;
 import android.media.session.MediaController;
 import android.media.session.MediaSessionManager;
@@ -90,15 +92,59 @@ final class Midia {
         audio.dispatchMediaKeyEvent(new KeyEvent(t, t, KeyEvent.ACTION_UP, codigo, 0));
     }
 
+    /**
+     * true se o que está tocando agora proíbe a captura do som. O Spotify faz isso:
+     * o Android respeita, e o 3DS só ouviria silêncio. Aí o 3DS avisa, em vez de
+     * ficar mudo sem explicação.
+     */
+    boolean capturaBloqueada() {
+        boolean tocando = false, liberado = false;
+        try {
+            for (AudioPlaybackConfiguration c : audio.getActivePlaybackConfigurations()) {
+                AudioAttributes a = c.getAudioAttributes();
+                int uso = a.getUsage();
+                if (uso != AudioAttributes.USAGE_MEDIA && uso != AudioAttributes.USAGE_GAME
+                        && uso != AudioAttributes.USAGE_UNKNOWN) continue;
+                tocando = true;
+                if (a.getAllowedCapturePolicy() == AudioAttributes.ALLOW_CAPTURE_BY_ALL) liberado = true;
+            }
+        } catch (Exception e) {
+            return false;
+        }
+        return tocando && !liberado;
+    }
+
     // ------------------------------------------------------------ volume
+    // Com o celular calado (o som só no 3DS), o volume do 3DS é o do som que vai pra lá.
     int volume() {
+        if (Estado.calado) return Estado.volume3ds;
         int max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
         return max <= 0 ? -1 : Math.round(audio.getStreamVolume(AudioManager.STREAM_MUSIC) * 100f / max);
     }
 
-    boolean mudo() { return audio.isStreamMute(AudioManager.STREAM_MUSIC); }
+    boolean mudo() {
+        if (Estado.calado) return Estado.volume3ds == 0;
+        return audio.isStreamMute(AudioManager.STREAM_MUSIC);
+    }
 
-    void volumeMais() { audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, 0); }
-    void volumeMenos() { audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, 0); }
-    void alternarMudo() { audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0); }
+    private int volumeAntesDoMudo = 80;
+
+    void volumeMais() {
+        if (Estado.calado) Estado.volume3ds = Math.min(100, Estado.volume3ds + 10);
+        else audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, 0);
+    }
+
+    void volumeMenos() {
+        if (Estado.calado) Estado.volume3ds = Math.max(0, Estado.volume3ds - 10);
+        else audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, 0);
+    }
+
+    void alternarMudo() {
+        if (Estado.calado) {
+            if (Estado.volume3ds > 0) { volumeAntesDoMudo = Estado.volume3ds; Estado.volume3ds = 0; }
+            else Estado.volume3ds = volumeAntesDoMudo;
+        } else {
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_TOGGLE_MUTE, 0);
+        }
+    }
 }

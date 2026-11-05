@@ -17,6 +17,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.Switch;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -36,6 +37,7 @@ public class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView ponto, estado, enderecos, somTexto, musicaTexto;
     private Button somBotao, musicaBotao;
+    private Switch calar;
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
@@ -73,6 +75,19 @@ public class MainActivity extends Activity {
         c2.addView(somTexto);
         somBotao = botao("Ligar o som", v -> pedirSom());
         c2.addView(somBotao);
+        calar = new Switch(this);
+        calar.setText("Som só no 3DS (o celular fica mudo)");
+        calar.setTextColor(TEXTO);
+        calar.setTextSize(15);
+        calar.setPadding(0, dp(12), 0, 0);
+        Estado.querCalar = getPreferences(MODE_PRIVATE).getBoolean("calar", true);
+        calar.setChecked(Estado.querCalar);
+        calar.setOnCheckedChangeListener((chave, ligado) -> {
+            Estado.querCalar = ligado;
+            Estado.calarNaoFunciona = false;      // tenta de novo
+            getPreferences(MODE_PRIVATE).edit().putBoolean("calar", ligado).apply();
+        });
+        c2.addView(calar);
 
         // música
         LinearLayout c3 = cartao(col);
@@ -138,7 +153,14 @@ public class MainActivity extends Activity {
                 somBotao.setEnabled(true);
                 estiloBotao(somBotao, AGUA, Color.WHITE);
             } else {
-                String s = Estado.somPedido ? "Mandando o som para o 3DS." : "Pronto. No 3DS, a Segunda Tela liga o som.";
+                String s = !Estado.somPedido ? "Pronto. No 3DS, a Segunda Tela liga o som."
+                        : Estado.somBloqueado ? "O app que está tocando não deixa mandar o som dele "
+                                + "(o Spotify faz isso). Ele continua saindo no celular."
+                        : Estado.calado ? "Mandando o som para o 3DS. O celular está mudo: o volume "
+                                + "agora é o do 3DS."
+                        : "Mandando o som para o 3DS.";
+                if (Estado.calarNaoFunciona)
+                    s += "\nNeste celular, calar o celular calava o 3DS também, então o som sai nos dois.";
                 if (!Estado.erroSom.isEmpty()) s += "\nErro: " + Estado.erroSom;
                 somTexto.setText(s);
                 somBotao.setText("Som liberado");

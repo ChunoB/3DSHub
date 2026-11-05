@@ -115,6 +115,8 @@ final class SegundaTela extends Thread {
         s.append("tocando=").append(m[2]).append('\n');
         s.append("celular=1\n");
         s.append("som=").append(Estado.somLigado ? 1 : 0).append('\n');
+        Estado.somBloqueado = midia.capturaBloqueada();
+        s.append("bloqueado=").append(Estado.somBloqueado ? 1 : 0).append('\n');
         s.append("atalhos=").append(String.join("|", ATALHOS)).append('\n');
         texto = s.toString().getBytes(StandardCharsets.UTF_8);
     }

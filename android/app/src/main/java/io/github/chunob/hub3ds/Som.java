@@ -3,6 +3,7 @@ package io.github.chunob.hub3ds;
 import android.annotation.SuppressLint;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.AudioPlaybackCaptureConfiguration;
 import android.media.AudioRecord;
 import android.media.projection.MediaProjection;
@@ -24,7 +25,12 @@ import java.net.SocketTimeoutException;
  *     "3DSS" + u32 seq + s16 previsão + u8 índice + u8 0 + 256 bytes
  * Sem "3DSU" por 3 segundos, para de gravar.
  *
- * Alguns apps proíbem a captura do som deles; aí o 3DS recebe silêncio.
+ * Alguns apps proíbem a captura do som deles (o Spotify, por exemplo); aí o 3DS
+ * recebe silêncio e a Segunda Tela avisa.
+ *
+ * Enquanto o som vai para o 3DS, o celular fica mudo (opção do app). O Android grava
+ * o som antes do volume do celular, então o 3DS continua ouvindo; se num celular isso
+ * não for verdade (a captura fica muda junto), o app percebe e devolve o som.
  */
 final class Som {
     static final int PORTA = 5013;
@@ -32,13 +38,30 @@ final class Som {
     private static final float GANHO_MAXIMO = 8f, ALVO = 0.9f;
 
     private final MediaProjection projecao;
+    private final AudioManager audio;
     private DatagramSocket sock;
     private volatile SocketAddress destino;
     private volatile long ultimoOi;
     private Thread escuta, gravacao;
     private volatile boolean rodando;
 
-    Som(MediaProjection projecao) { this.projecao = projecao; }
+    Som(MediaProjection projecao, AudioManager audio) {
+        this.projecao = projecao;
+        this.audio = audio;
+    }
+
+    // ------------------------------------------------------------ celular mudo
+    private void calar() {
+        if (Estado.calado || !Estado.querCalar || Estado.calarNaoFunciona || Estado.somBloqueado) return;
+        audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0);
+        Estado.calado = true;
+    }
+
+    private void descalar() {
+        if (!Estado.calado) return;
+        Estado.calado = false;
+        audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0);
+    }
 
     private boolean ativo() {
         return destino != null && SystemClock.elapsedRealtime() - ultimoOi < 3000;
@@ -61,6 +84,7 @@ final class Som {
 
     void parar() {
         rodando = false;
+        descalar();
         Estado.somLigado = false;
         Estado.somPedido = false;
         if (sock != null) sock.close();
@@ -126,6 +150,7 @@ final class Som {
                 android.util.Log.w("3dshub", "Som", e);
                 SystemClock.sleep(2000);
             } finally {
+                descalar();
                 if (rec != null) {
                     try { rec.stop(); } catch (Exception ignorado) {}
                     rec.release();
@@ -144,11 +169,27 @@ final class Som {
         double pos = 0;                 // posição (em amostras de entrada) da próxima amostra de saída
         final double passo = (double) TAXA_ENTRADA / TAXA_SAIDA;
         float anterior = 0, pico = 0, ganho = 1;
+        long caladoDesde = 0, ultimoSom = SystemClock.elapsedRealtime();
 
         while (rodando && ativo()) {
             int n = rec.read(entrada, 0, entrada.length);
             if (n <= 0) continue;
             int quadros = n / 2;
+
+            // celular mudo: liga, desliga e confere se o 3DS continua recebendo som
+            long agora = SystemClock.elapsedRealtime();
+            int maior = 0;
+            for (int i = 0; i < n; i++) maior = Math.max(maior, Math.abs((int) entrada[i]));
+            if (maior > 3) ultimoSom = agora;
+            boolean querMudo = Estado.querCalar && !Estado.somBloqueado && !Estado.calarNaoFunciona;
+            if (querMudo && !Estado.calado) { calar(); caladoDesde = agora; }
+            else if (!querMudo && Estado.calado) descalar();
+            if (Estado.calado && audio.isMusicActive() && agora - caladoDesde > 4000 && agora - ultimoSom > 4000) {
+                // tocando, mas a captura ficou muda desde que calou: neste celular não dá
+                Estado.calarNaoFunciona = true;
+                descalar();
+            }
+            float volume = Estado.calado ? Estado.volume3ds / 100f : 1f;
             // mono + passa-baixa simples (média com a amostra anterior) e reamostragem
             float[] mono = new float[quadros + 1];
             mono[0] = anterior;
@@ -170,7 +211,7 @@ final class Som {
                 float y = Math.max(-1.5f, Math.min(1.5f, x * ganho));
                 y = y - y * y * y / 6.75f;
 
-                pacote[cheio++] = (short) Math.round(Math.max(-1f, Math.min(1f, y)) * 32767);
+                pacote[cheio++] = (short) Math.round(Math.max(-1f, Math.min(1f, y)) * 32767 * volume);
                 if (cheio == AMOSTRAS) {
                     int previsao = adpcm.previsao, indice = adpcm.indice;
                     saida[4] = (byte) seq; saida[5] = (byte) (seq >> 8);

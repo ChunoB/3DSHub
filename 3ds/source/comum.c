@@ -28,7 +28,9 @@ bool apertouStart;
 bool desistirDaRede(void) {
     if (aptShouldClose()) return true;
     hidScanInput();
-    if (hidKeysHeld() & KEY_START) apertouStart = true;
+    // só um toque novo: o START que ainda está segurado desde a saída de um
+    // módulo não pode fechar o app inteiro
+    if (hidKeysDown() & KEY_START) apertouStart = true;
     return apertouStart;
 }
 
@@ -213,7 +215,7 @@ int conectarTCP(int porta, int timeoutMs) {
             svcSleepThread(10 * 1000000LL);   // 10 ms: o poll pode voltar na hora sem ter conectado
         }
         hidScanInput();
-        if ((hidKeysDown() | hidKeysHeld()) & (KEY_B | KEY_START)) {
+        if (hidKeysDown() & (KEY_B | KEY_START)) {
             close(sock);
             return CONEXAO_CANCELADA;
         }

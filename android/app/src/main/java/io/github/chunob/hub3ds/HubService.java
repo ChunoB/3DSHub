@@ -121,7 +121,7 @@ public class HubService extends Service {
             }
         }, handler);
         try {
-            som = new Som(projecao);
+            som = new Som(projecao, getSystemService(android.media.AudioManager.class));
             som.iniciar();
         } catch (Exception e) {
             Estado.erroSom = e.toString();
