@@ -1,7 +1,11 @@
 package io.github.chunob.hub3ds;
 
 import android.content.ComponentName;
+import android.app.SearchManager;
 import android.content.Context;
+import android.content.Intent;
+import android.os.Bundle;
+import android.provider.MediaStore;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.AudioPlaybackConfiguration;
@@ -62,6 +66,56 @@ final class Midia {
     }
 
     private static String texto(String s) { return s == null ? "" : s; }
+
+    static final String YT_MUSIC = "com.google.android.apps.youtube.music";
+
+    /**
+     * Toca uma música buscada pelo nome, pelo caminho oficial que o Google Assistente usa
+     * ("tocar tal música"). Se o YouTube Music já está aberto, pede direto para ele; senão
+     * abre o YouTube Music com a busca (no Android 10+, abrir outro app a partir do
+     * segundo plano precisa da permissão "sobrepor a outros apps").
+     */
+    boolean buscar(String busca) {
+        MediaController c = controlador(YT_MUSIC);
+        if (c != null) {
+            PlaybackState s = c.getPlaybackState();
+            if (s != null && (s.getActions() & PlaybackState.ACTION_PLAY_FROM_SEARCH) != 0) {
+                c.getTransportControls().playFromSearch(busca, new Bundle());
+                return true;
+            }
+        }
+        Intent i = new Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+                .putExtra(SearchManager.QUERY, busca)
+                .putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (instalado(YT_MUSIC)) i.setPackage(YT_MUSIC);
+        try {
+            ctx.startActivity(i);
+            return true;
+        } catch (Exception e) {
+            android.util.Log.w("3dshub", "Buscar", e);
+            return false;
+        }
+    }
+
+    private boolean instalado(String pacote) {
+        try {
+            ctx.getPackageManager().getPackageInfo(pacote, 0);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private MediaController controlador(String pacote) {
+        if (!temAcesso(ctx)) return null;
+        try {
+            MediaSessionManager m = (MediaSessionManager) ctx.getSystemService(Context.MEDIA_SESSION_SERVICE);
+            for (MediaController c : m.getActiveSessions(new ComponentName(ctx, OuvinteNotificacoes.class)))
+                if (pacote.equals(c.getPackageName())) return c;
+        } catch (SecurityException ignorado) {}
+        return null;
+    }
 
     void playPause() {
         MediaController c = atual();

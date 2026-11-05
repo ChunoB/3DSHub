@@ -5,6 +5,7 @@
 //   esquerda/direita       : música anterior/próxima
 //   cima/baixo             : volume
 //   X                      : o som do PC (ou do celular) tocando aqui no 3DS
+//   Y                      : (celular) buscar uma música e tocar no YouTube Music
 //   START                  : voltar ao menu
 //
 // Com o celular no lugar do PC (app 3DS Hub do Android), a tela de cima troca CPU e
@@ -270,7 +271,16 @@ static void desenharBaixo(const Dados *d, int aceso) {
         }
     }
 
-    if (pagina == 0) {
+    if (pagina == 0 && d->celular) {
+        // celular: no lugar da dica, o botão de buscar música
+        float f = d->vol < 0 ? 0 : d->vol / 100.0f;
+        char vol[16];
+        textoVolume(d, vol, sizeof(vol));
+        uiTexto(10, 180, 12, COR_MUDO, ESQ, 0, "Volume");
+        uiTexto(310, 180, 12, d->mudo ? COR_VERMELHO : COR_TEXTO2, DIR, 0, "%s", vol);
+        uiBarra(10, 196, 300, 6, d->mudo ? 0 : f, COR_AGUA_CL, COR_CARTAO);
+        uiBotao(10, 208, 300, 26, "Buscar música (Y)", IC_LUPA, COR_CARTAO2, COR_TEXTO);
+    } else if (pagina == 0) {
         float f = d->vol < 0 ? 0 : d->vol / 100.0f;
         char vol[16];
         if (d->mudo)          snprintf(vol, sizeof(vol), "mudo");
@@ -289,6 +299,10 @@ static void desenharBaixo(const Dados *d, int aceso) {
     }
 }
 
+static bool tocouBuscar(const touchPosition *tp) {
+    return pagina == 0 && uiDentro(tp, 10, 208, 300, 26);
+}
+
 static int botaoTocado(const touchPosition *tp, int *aba) {
     *aba = -1;
     if (tp->py < 40) {                                      // linha das abas
@@ -301,6 +315,20 @@ static int botaoTocado(const touchPosition *tp, int *aba) {
         if (uiDentro(tp, x, y, w, h)) return i;
     }
     return -1;
+}
+
+// Teclado do 3DS -> o celular manda o YouTube Music tocar ("3DSB" + texto)
+static void buscarMusica(int sock, struct sockaddr_in *dest) {
+    SwkbdState kb;
+    char busca[96];
+    swkbdInit(&kb, SWKBD_TYPE_NORMAL, 2, 60);
+    swkbdSetHintText(&kb, "Música, artista ou álbum");
+    swkbdSetButton(&kb, SWKBD_BUTTON_RIGHT, "Tocar", true);
+    if (swkbdInputText(&kb, busca, sizeof(busca)) != SWKBD_BUTTON_CONFIRM || !busca[0]) return;
+    char pkt[100];
+    memcpy(pkt, "3DSB", 4);
+    int n = snprintf(pkt + 4, sizeof(pkt) - 4, "%s", busca);
+    enviarPara(sock, pkt, 4 + n, dest);
 }
 
 static void enviar(int sock, struct sockaddr_in *dest, const char *magic, int cmd) {
@@ -361,6 +389,7 @@ void modTela(void) {
             if (somLigado()) somEncerrar();
             else if (!somIniciar()) avisoSemSom();
         }
+        if ((down & KEY_Y) && d.celular) buscarMusica(sock, &dest);
         if (somLigado()) somAtualizar();
 
         if (down & (KEY_L | KEY_R)) {
@@ -373,6 +402,7 @@ void modTela(void) {
             touchPosition tp;
             int aba;
             hidTouchRead(&tp);
+            if (d.celular && tocouBuscar(&tp)) buscarMusica(sock, &dest);
             idx = botaoTocado(&tp, &aba);
             if (aba >= 0 && aba != pagina) {
                 pagina = aba;

@@ -228,10 +228,10 @@ static void desenharBaixo(const Estado *e) {
     // estado da conexão
     uiRetArred(10, 8, 300, 40, 10, COR_CARTAO);
     uiIcone(IC_CAMERA, 30, 28, 20, COR_CORAL_CL, COR_CARTAO);
-    if (!e->conectado)    uiTexto(48, 19, 14, COR_AMARELO, ESQ, 140, "Conectando ao PC...");
+    if (!e->conectado)    uiTexto(48, 19, 14, COR_AMARELO, ESQ, 140, alvoCelular() ? "Conectando ao celular..." : "Conectando ao PC...");
     else if (e->pausado)  uiTexto(48, 19, 14, COR_TEXTO2, ESQ, 140, "Pausado");
-    else                  uiTexto(48, 19, 14, COR_AGUA_CL, ESQ, 140, "Enviando ao PC");
-    uiTexto(300, 21, 12, COR_MUDO, DIR, 110, "PC %s", ipPC);
+    else                  uiTexto(48, 19, 14, COR_AGUA_CL, ESQ, 140, alvoCelular() ? "Enviando ao celular" : "Enviando ao PC");
+    uiTexto(300, 21, 12, COR_MUDO, DIR, 110, "%s %s", alvoCelular() ? "Celular" : "PC", ipPC);
 
     // escolha da câmera (e como a imagem dela está virada)
     uiTexto(10, 54, 12, COR_MUDO, ESQ, 0, "Câmera (Y)");
@@ -254,6 +254,9 @@ static void desenharBaixo(const Estado *e) {
     if (erroConfig) {
         uiTexto(20, 177, 12, COR_VERMELHO, ESQ, 280, "A câmera recusou a configuração");
         uiTexto(20, 194, 13, COR_TEXTO2, ESQ, 280, "erro 0x%08lX (me mande esse código)", erroConfig);
+    } else if (alvoCelular()) {
+        uiTexto(20, 177, 12, COR_MUDO, ESQ, 0, "No celular: a câmera aparece no app");
+        uiTexto(20, 194, 13, COR_TEXTO2, ESQ, 280, "Lá dá para salvar a foto na galeria");
     } else {
         uiTexto(20, 177, 12, COR_MUDO, ESQ, 0, "No OBS: Fonte > Navegador");
         uiTexto(20, 194, 13, COR_TEXTO2, ESQ, 280, "http://127.0.0.1:8090/obs");

@@ -45,10 +45,12 @@ ESTRUTURA
   pc\util.py              teclado/mouse, cliques, IPs do PC
 
   android\                app do celular (Java, sem bibliotecas extras): responde nas
-                          mesmas portas do PC. Hoje: Descoberta (5009), Segunda Tela
-                          (5006, com a musica do celular) e Som (5013, captura do audio
-                          dos apps). O nome na descoberta comeca com "Celular": e assim
-                          que o 3DS sabe que e um celular (alvoCelular() em comum.c).
+                          mesmas portas do PC, com os mesmos protocolos: Controle (5005,
+                          toques pela acessibilidade), Segunda Tela (5006), Camera (5007),
+                          Espelho (5008), Descoberta (5009), Som (5013), Bichinho (5014),
+                          Pescaria (5015) e Karaoke (5016). O nome na descoberta comeca
+                          com "Celular": e assim que o 3DS sabe que e um celular
+                          (alvoCelular() em comum.c).
 
 COMPILAR O APP DO 3DS (Windows)
 1. Instale o devkitPro (https://github.com/devkitPro/installer/releases)

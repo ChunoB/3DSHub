@@ -25,18 +25,28 @@ NO 3DS (escolha um jeito)
 
 NO CELULAR (ANDROID, EM TESTE)
 O 3DS Hub tambem funciona com o celular no lugar do PC (Android 10 ou
-mais novo; iPhone nao da).
+mais novo; iPhone nao da). Todos os modulos funcionam, menos a Steam.
 1. Instale o 3dshub-celular.apk no celular e abra o app "3DS Hub".
-2. Toque em "Ligar o som" e permita (o Android chama de "gravar a tela":
-   e como ele chama a captura do som) e em "Permitir ler a musica".
+2. Libere as permissoes que for usar (a tela do app explica cada uma):
+   Som e tela, Ler a musica, Toques do 3DS e Abrir apps sozinho.
 3. Deixe o 3DS e o celular na mesma rede. Na rua, ligue o roteador
    (hotspot) do celular e conecte o 3DS nele.
-4. No 3DS, o menu acha o celular sozinho ("Celular encontrado"). Abra a
-   Segunda Tela: a musica do celular aparece, os botoes controlam o
-   player e o som sai no 3DS (X liga e desliga).
-Por enquanto funcionam com o celular: Segunda Tela (com o som),
-Sintetizador, Bichinho e Ajustes. Os outros avisam que ainda sao so do PC.
-Alguns apps proibem a captura do som deles: ai o 3DS fica mudo.
+4. No 3DS, o menu acha o celular sozinho ("Celular encontrado"). SELECT
+   no menu escolhe outro PC ou celular.
+No celular cada modulo fica assim:
+- Segunda Tela: musica do celular, som no 3DS (X), busca de musica que
+  toca no YouTube Music (Y), bateria, lanterna e "achar o celular".
+- Espelho: a tela do celular no 3DS; tocar no 3DS toca no celular e o
+  teclado do 3DS digita nele. Botoes Voltar, Inicio e Apps.
+- Controle: cada botao do 3DS vira um toque na tela. Abra o jogo e toque
+  em "Botoes do controle" na notificacao para marcar os lugares.
+- Camera: a camera do 3DS aparece no app; da para salvar a foto.
+- Pescaria: o lago abre na tela do celular (deitado).
+- Karaoke: a letra da musica do celular, notas, perfis e recordes.
+- Bichinho: danca com a musica, sua com o celular quente, fica bravo com
+  muitas notificacoes e dorme com a tela apagada.
+Alguns apps proibem a captura do som deles (o Spotify, por exemplo): o
+som deles fica so no celular.
 
 O 3DS ACHA O PC SOZINHO
 - Com o PC e o 3DS na mesma rede (ou no hotspot do PC), o 3DS Hub

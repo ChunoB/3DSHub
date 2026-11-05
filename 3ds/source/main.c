@@ -36,7 +36,7 @@ typedef struct {
 static const Item itens[] = {
     { "Controle", "Xbox, teclado e mouse no PC",
       "Use o 3DS como controle de Xbox, teclado ou\ntouchpad. Mira por giroscópio com SELECT+B.",
-      IC_CONTROLE, COR_ROXO, COR_ROXO_CL, modControle, true, false, NULL },
+      IC_CONTROLE, COR_ROXO, COR_ROXO_CL, modControle, true, true, "Botões do 3DS viram toques no celular" },
     { "Segunda Tela", "Gráficos, música e atalhos",
       "CPU, GPU, RAM e rede do PC em tempo real,\ncontrole de música e volume e atalhos.",
       IC_GRAFICO, COR_VERDE_AGUA, COR_AGUA_CL, modTela, true, true, "Música, som e bateria do celular" },
@@ -45,22 +45,22 @@ static const Item itens[] = {
       IC_PIANO, COR_ROSA, COR_ROSA_CL, modSintetizador, false, true, NULL },
     { "Câmera", "Webcam no OBS, até em 3D",
       "Manda a câmera do 3DS para o OBS do PC.\nTraseira, frontal ou as duas em 3D.",
-      IC_CAMERA, COR_CORAL, COR_CORAL_CL, modCamera, true, false, NULL },
+      IC_CAMERA, COR_CORAL, COR_CORAL_CL, modCamera, true, true, "Câmera do 3DS no celular" },
     { "Espelho", "Uma janela do PC aqui",
       "Mostra uma janela do PC na tela de cima, com\nzoom (R/L). Na aba Clicar, toque para clicar.",
-      IC_ESPELHO, COR_AZUL, COR_AZUL_CL, modEspelho, true, false, NULL },
+      IC_ESPELHO, COR_AZUL, COR_AZUL_CL, modEspelho, true, true, "A tela do celular aqui" },
     { "Steam", "Seus jogos do PC aqui",
       "A biblioteca da Steam do PC. Escolha um jogo:\nele abre no PC e aparece na tela de cima,\ncom os botões do 3DS como controle.",
       IC_PLAY, COR_STEAM, COR_STEAM_CL, modSteam, true, false, NULL },
     { "Bichinho", "Mora no 3DS, sente o PC",
       "Um bichinho que dança com a música do PC, sua\ncom a CPU quente e dorme com o PC parado.\nDê comida e faça carinho com a caneta.",
-      IC_BICHO, COR_BICHO, COR_BICHO_CL, modBicho, false, true, NULL },
+      IC_BICHO, COR_BICHO, COR_BICHO_CL, modBicho, false, true, "Mora no 3DS, sente o celular" },
     { "Pescaria", "Peixes na TV, vara no 3DS",
       "Os peixes nadam no monitor do PC. Mire com o\ncircle pad, balance o 3DS para lançar e gire a\ncaneta para puxar. Dá para jogar em vários.",
-      IC_PEIXE, COR_PESCA, COR_PESCA_CL, modPescaria, true, false, NULL },
+      IC_PEIXE, COR_PESCA, COR_PESCA_CL, modPescaria, true, true, "Peixes no celular, vara no 3DS" },
     { "Karaokê", "Cante com a música do PC",
       "Toque uma música no PC (Spotify, YouTube...):\na letra rola aqui e o PC dá nota para a sua\nafinação no microfone do 3DS.",
-      IC_MICROFONE, COR_KARAOKE, COR_KARAOKE_CL, modKaraoke, true, false, NULL },
+      IC_MICROFONE, COR_KARAOKE, COR_KARAOKE_CL, modKaraoke, true, true, "Cante com a música do celular" },
     { "Ajustes", "PC, atualização e giroscópio",
       "Procurar o PC, atualizar o app pelo Wi-Fi e\najustar o giroscópio e o touchpad.",
       IC_ENGRENAGEM, COR_CARTAO2, COR_TEXTO2, modAjustes, false, true, NULL },
@@ -224,7 +224,7 @@ static void desenharMenu(int sel, bool temIP) {
     uiTexto(94, 72, 13, it->corClara, ESQ, 290, "%s", cel && it->subCelular ? it->subCelular : it->subtitulo);
     if (cel && !it->noCelular) {
         uiRetArred(94, 92, 150, 18, 9, COR_CARTAO2);
-        uiTexto(169, 94, 11, COR_TEXTO2, CENTRO, 0, "Só com o PC, por enquanto");
+        uiTexto(169, 94, 11, COR_TEXTO2, CENTRO, 0, "Só com o PC");
     }
     uiTexto(16, 114, 13, COR_TEXTO2, ESQ, 0, "%s", it->descricao);
 
@@ -358,8 +358,7 @@ int main(int argc, char **argv) {
         if (abrir >= 0) {
             const Item *it = &itens[abrir];
             if (alvoCelular() && !it->noCelular) {
-                uiAviso(it->nome, "Este módulo ainda só funciona com o PC.\n"
-                        "Ele chega ao app do celular numa\nversão futura.", it->icone, it->cor);
+                uiAviso(it->nome, "Este módulo só funciona com o PC.", it->icone, it->cor);
             } else if (it->precisaPC && !rede) {
                 uiAviso("Rede do 3DS", "Não consegui iniciar a rede do 3DS.\nReinicie o app.", IC_X, COR_VERMELHO);
             } else if (it->precisaPC && !modoRemoto && !ipPC[0] && !pedirIP()) {

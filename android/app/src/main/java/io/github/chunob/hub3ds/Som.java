@@ -63,8 +63,14 @@ final class Som {
         audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0);
     }
 
-    private boolean ativo() {
+    /** O 3DS está pedindo o som agora. */
+    private boolean somQuerido() {
         return destino != null && SystemClock.elapsedRealtime() - ultimoOi < 3000;
+    }
+
+    /** A captura roda para o som do 3DS ou para o Karaokê (que ouve as notas da música). */
+    private boolean ativo() {
+        return somQuerido() || Karaoke.querOuvir();
     }
 
     void iniciar() throws Exception {
@@ -138,7 +144,6 @@ final class Som {
                 SystemClock.sleep(200);
                 continue;
             }
-            Estado.somPedido = true;
             AudioRecord rec = null;
             try {
                 rec = abrirCaptura();
@@ -162,6 +167,7 @@ final class Som {
     private void transmitir(AudioRecord rec) throws Exception {
         short[] entrada = new short[2048 * 2];
         short[] pacote = new short[AMOSTRAS];
+        float[] ouvido = new float[2048];
         byte[] saida = new byte[12 + AMOSTRAS / 2];
         saida[0] = '3'; saida[1] = 'D'; saida[2] = 'S'; saida[3] = 'S';
         Adpcm adpcm = new Adpcm();
@@ -175,13 +181,15 @@ final class Som {
             int n = rec.read(entrada, 0, entrada.length);
             if (n <= 0) continue;
             int quadros = n / 2;
+            boolean querido = somQuerido();
+            Estado.somPedido = querido;
 
             // celular mudo: liga, desliga e confere se o 3DS continua recebendo som
             long agora = SystemClock.elapsedRealtime();
             int maior = 0;
             for (int i = 0; i < n; i++) maior = Math.max(maior, Math.abs((int) entrada[i]));
             if (maior > 3) ultimoSom = agora;
-            boolean querMudo = Estado.querCalar && !Estado.somBloqueado && !Estado.calarNaoFunciona;
+            boolean querMudo = querido && Estado.querCalar && !Estado.somBloqueado && !Estado.calarNaoFunciona;
             if (querMudo && !Estado.calado) { calar(); caladoDesde = agora; }
             else if (!querMudo && Estado.calado) descalar();
             if (Estado.calado && audio.isMusicActive() && agora - caladoDesde > 4000 && agora - ultimoSom > 4000) {
@@ -190,6 +198,8 @@ final class Som {
                 descalar();
             }
             float volume = Estado.calado ? Estado.volume3ds / 100f : 1f;
+            boolean karaoke = Karaoke.querOuvir();
+            int nOuvido = 0;
             // mono + passa-baixa simples (média com a amostra anterior) e reamostragem
             float[] mono = new float[quadros + 1];
             mono[0] = anterior;
@@ -202,6 +212,10 @@ final class Som {
                 int i = (int) pos;
                 float f = (float) (pos - i);
                 float x = mono[i] * (1 - f) + mono[i + 1] * f;
+                if (karaoke) {
+                    if (nOuvido == ouvido.length) { Karaoke.ouvir(ouvido, nOuvido); nOuvido = 0; }
+                    ouvido[nOuvido++] = x;
+                }
 
                 // ganho automático (sobe devagar, desce na hora) + limitador suave, como no PC
                 float a = Math.abs(x);
@@ -220,13 +234,14 @@ final class Som {
                     saida[10] = (byte) indice; saida[11] = 0;
                     adpcm.codificar(pacote, AMOSTRAS, saida, 12);
                     SocketAddress d = destino;
-                    if (d != null) sock.send(new DatagramPacket(saida, saida.length, d));
+                    if (d != null && querido) sock.send(new DatagramPacket(saida, saida.length, d));
                     seq++;
                     cheio = 0;
                 }
                 pos += passo;
             }
             pos -= quadros;
+            if (karaoke && nOuvido > 0) Karaoke.ouvir(ouvido, nOuvido);
         }
     }
 }

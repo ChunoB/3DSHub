@@ -23,11 +23,18 @@ import android.os.Looper;
 public class HubService extends Service {
     static final String LIGAR_SOM = "ligar_som", DESLIGAR = "desligar";
     static final String EXTRA_CODIGO = "codigo", EXTRA_DADOS = "dados";
-    private static final String CANAL = "hub";
+    static final String CANAL = "hub";
     private static final int NOTIFICACAO = 1;
 
     private Descoberta descoberta;
     private SegundaTela tela;
+    private Bicho bicho;
+    private Espelho espelho;
+    private Camera camera;
+    private Pescaria pescaria;
+    private Karaoke karaoke;
+    private Controle controle;
+    private volatile CapturaTela captura;
     private Som som;
     private MediaProjection projecao;
     private WifiManager.MulticastLock trava;
@@ -56,9 +63,24 @@ public class HubService extends Service {
         descoberta.start();
         tela = new SegundaTela(this);
         tela.start();
+        bicho = new Bicho(this);
+        bicho.start();
+        espelho = new Espelho(this);
+        espelho.start();
+        camera = new Camera(this);
+        camera.start();
+        pescaria = new Pescaria(this);
+        pescaria.start();
+        karaoke = new Karaoke(this);
+        karaoke.start();
+        controle = new Controle(this);
+        controle.start();
         Estado.servicoRodando = true;
         handler.postDelayed(this::vigiar, 1000);
     }
+
+    /** A imagem da tela (para o Espelho); null antes de permitir no app. */
+    CapturaTela captura() { return captura; }
 
     private void primeiroPlano(boolean comSom) {
         int tipo = ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE;
@@ -79,6 +101,9 @@ public class HubService extends Service {
                 .setContentText(texto)
                 .setContentIntent(abrir)
                 .setOngoing(true)
+                .addAction(new Notification.Action.Builder(null, "Botões do controle", PendingIntent.getActivity(this, 4,
+                        new Intent(this, ControleConfigActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        PendingIntent.FLAG_IMMUTABLE)).build())
                 .addAction(new Notification.Action.Builder(null, "Desligar", desligar).build())
                 .build();
     }
@@ -116,10 +141,14 @@ public class HubService extends Service {
             @Override public void onStop() {
                 if (som != null) som.parar();
                 som = null;
+                if (captura != null) captura.encerrar();
+                captura = null;
                 projecao = null;
                 handler.post(() -> primeiroPlano(false));
             }
         }, handler);
+        if (captura != null) captura.encerrar();
+        captura = new CapturaTela(this, projecao);
         try {
             som = new Som(projecao, getSystemService(android.media.AudioManager.class));
             som.iniciar();
@@ -135,6 +164,13 @@ public class HubService extends Service {
         if (projecao != null) projecao.stop();
         if (descoberta != null) descoberta.parar();
         if (tela != null) tela.parar();
+        if (bicho != null) bicho.parar();
+        if (espelho != null) espelho.parar();
+        if (camera != null) camera.parar();
+        if (pescaria != null) pescaria.parar();
+        if (karaoke != null) karaoke.parar();
+        if (controle != null) controle.parar();
+        if (captura != null) captura.encerrar();
         if (trava != null) trava.release();
         Estado.servicoRodando = false;
         Estado.somLigado = false;

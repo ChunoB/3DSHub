@@ -170,7 +170,7 @@ final class SegundaTela extends Thread {
             sock.setReuseAddress(true);
             sock.bind(new InetSocketAddress(PORTA));
             sock.setSoTimeout(200);
-            byte[] buf = new byte[64];
+            byte[] buf = new byte[256];
             long ultima = 0;
             while (!isInterrupted()) {
                 long agora = SystemClock.elapsedRealtime();
@@ -189,6 +189,11 @@ final class SegundaTela extends Thread {
                 Estado.viu3ds(p.getAddress().getHostAddress());
                 if (buf[3] == 'P') {                       // ping do menu do 3DS
                     responder("3DSP".getBytes(StandardCharsets.US_ASCII), origem);
+                    continue;
+                }
+                if (buf[3] == 'B' && p.getLength() > 4) {    // buscar música (texto UTF-8)
+                    String busca = new String(buf, 4, p.getLength() - 4, StandardCharsets.UTF_8).trim();
+                    if (!busca.isEmpty()) midia.buscar(busca);
                     continue;
                 }
                 if (buf[3] != 'H' && buf[3] != 'C') continue;
