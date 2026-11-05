@@ -23,7 +23,7 @@ NO 3DS (escolha um jeito)
 - No HOME Menu, como um jogo: copie "3dshub.cia" para o SD e instale
   pelo FBI. Depois pode apagar o .cia do SD.
 
-NO CELULAR (ANDROID, EM TESTE)
+NO CELULAR (ANDROID)
 O 3DS Hub tambem funciona com o celular no lugar do PC (Android 10 ou
 mais novo; iPhone nao da). Todos os modulos funcionam, menos a Steam.
 1. Instale o 3dshub-celular.apk no celular e abra o app "3DS Hub".

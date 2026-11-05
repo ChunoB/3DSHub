@@ -87,3 +87,13 @@ COMPILAR O APP DO CELULAR (Android)
 
   O GitHub Actions (.github/workflows/compilar.yml) gera o .3dsx, o .cia e o
   .apk a cada envio que mexe em 3ds/ ou android/, como artefatos para testar.
+
+PUBLICAR UMA VERSAO
+  1. Suba a versao no Makefile do 3DS (VERSION_MAJOR/MINOR/MICRO) e, se o app do
+     celular mudou, compile o APK com a chave e copie para
+     android\release\3dshub-celular.apk (o APK publicado precisa da chave do
+     projeto, que nao fica no GitHub; por isso ele vai pronto no repositorio).
+  2. No GitHub: Actions > Publicar > Run workflow, com a versao (ex.: 1.13.0) e
+     as novidades. Ele compila o .3dsx e o .cia, monta o 3dshub-pacote.zip (com o
+     APK e a pasta pc) e cria a release vX.Y.Z com os quatro arquivos.
+     O app do 3DS de todo mundo oferece a atualizacao a partir dela.
