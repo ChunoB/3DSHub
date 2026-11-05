@@ -23,6 +23,21 @@ NO 3DS (escolha um jeito)
 - No HOME Menu, como um jogo: copie "3dshub.cia" para o SD e instale
   pelo FBI. Depois pode apagar o .cia do SD.
 
+NO CELULAR (ANDROID, EM TESTE)
+O 3DS Hub tambem funciona com o celular no lugar do PC (Android 10 ou
+mais novo; iPhone nao da).
+1. Instale o 3dshub-celular.apk no celular e abra o app "3DS Hub".
+2. Toque em "Ligar o som" e permita (o Android chama de "gravar a tela":
+   e como ele chama a captura do som) e em "Permitir ler a musica".
+3. Deixe o 3DS e o celular na mesma rede. Na rua, ligue o roteador
+   (hotspot) do celular e conecte o 3DS nele.
+4. No 3DS, o menu acha o celular sozinho ("Celular encontrado"). Abra a
+   Segunda Tela: a musica do celular aparece, os botoes controlam o
+   player e o som sai no 3DS (X liga e desliga).
+Por enquanto funcionam com o celular: Segunda Tela (com o som),
+Sintetizador, Bichinho e Ajustes. Os outros avisam que ainda sao so do PC.
+Alguns apps proibem a captura do som deles: ai o 3DS fica mudo.
+
 O 3DS ACHA O PC SOZINHO
 - Com o PC e o 3DS na mesma rede (ou no hotspot do PC), o 3DS Hub
   procura o PC sozinho. Em Ajustes da para procurar de novo ou

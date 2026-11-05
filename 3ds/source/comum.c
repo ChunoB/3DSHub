@@ -77,6 +77,10 @@ bool pedirIP(void) {
 
 // ---------------------------------------------------------------- descoberta
 
+bool alvoCelular(void) {
+    return !modoRemoto && !strncmp(nomePC, "Celular", 7);
+}
+
 #define PORTA_DESCOBERTA 5009
 
 int descobertaAbrir(void) {

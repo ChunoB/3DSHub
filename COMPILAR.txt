@@ -44,6 +44,12 @@ ESTRUTURA
   pc\som.py               porta 5013 (UDP) - o som do PC (loopback) compactado para o 3DS
   pc\util.py              teclado/mouse, cliques, IPs do PC
 
+  android\                app do celular (Java, sem bibliotecas extras): responde nas
+                          mesmas portas do PC. Hoje: Descoberta (5009), Segunda Tela
+                          (5006, com a musica do celular) e Som (5013, captura do audio
+                          dos apps). O nome na descoberta comeca com "Celular": e assim
+                          que o 3DS sabe que e um celular (alvoCelular() em comum.c).
+
 COMPILAR O APP DO 3DS (Windows)
 1. Instale o devkitPro (https://github.com/devkitPro/installer/releases)
    marcando "3DS Development".
@@ -66,3 +72,16 @@ GERAR O CIA (opcional, para o HOME Menu)
 RODAR O SERVIDOR DO PC
   Python 3 + "pc\instalar.bat" (instala tudo e abre o Hub).
   Para ver os logs na tela:  py pc\hub.py
+
+COMPILAR O APP DO CELULAR (Android)
+  Com o Android Studio: abra a pasta android e use Build > Build APK.
+  Pela linha de comando (JDK 17 e Android SDK instalados):
+     cd android
+     gradlew assembleRelease
+  Sai android\app\build\outputs\apk\release\app-release.apk. Para cada versao
+  nova instalar por cima da antiga, use sempre a mesma chave: coloque a pasta
+  "chave" (3dshub-celular.jks + chave.properties) dentro de android. Ela nao vai
+  para o GitHub. Sem ela o APK sai com a chave de teste do Android.
+
+  O GitHub Actions (.github/workflows/compilar.yml) gera o .3dsx, o .cia e o
+  .apk a cada envio que mexe em 3ds/ ou android/, como artefatos para testar.

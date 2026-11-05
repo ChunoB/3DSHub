@@ -1,4 +1,6 @@
 // 3DS Hub — menu que junta Controle, Segunda Tela, Sintetizador, Câmera, Espelho, Steam e Ajustes.
+// Do outro lado pode estar o PC (pasta pc) ou o celular (pasta android): o celular
+// responde nas mesmas portas, e os módulos que ele ainda não tem avisam isso.
 //
 // Menu: cruz ou toque = escolher, A = abrir, Y = Ajustes, START = sair
 //
@@ -26,39 +28,41 @@ typedef struct {
     u32 cor, corClara;
     void (*abrir)(void);
     bool precisaPC;
+    bool noCelular;             // já funciona com o app do celular (Android)
+    const char *subCelular;     // subtítulo quando o 3DS está ligado ao celular (NULL = o mesmo)
 } Item;
 
 static const Item itens[] = {
     { "Controle", "Xbox, teclado e mouse no PC",
       "Use o 3DS como controle de Xbox, teclado ou\ntouchpad. Mira por giroscópio com SELECT+B.",
-      IC_CONTROLE, COR_ROXO, COR_ROXO_CL, modControle, true },
+      IC_CONTROLE, COR_ROXO, COR_ROXO_CL, modControle, true, false, NULL },
     { "Segunda Tela", "Gráficos, música e atalhos",
       "CPU, GPU, RAM e rede do PC em tempo real,\ncontrole de música e volume e atalhos.",
-      IC_GRAFICO, COR_VERDE_AGUA, COR_AGUA_CL, modTela, true },
+      IC_GRAFICO, COR_VERDE_AGUA, COR_AGUA_CL, modTela, true, true, "Música, som e bateria do celular" },
     { "Sintetizador", "Teclado e theremin",
       "Toque na tela de baixo para tocar. Inclinar\no console entorta a nota. Não precisa do PC.",
-      IC_PIANO, COR_ROSA, COR_ROSA_CL, modSintetizador, false },
+      IC_PIANO, COR_ROSA, COR_ROSA_CL, modSintetizador, false, true, NULL },
     { "Câmera", "Webcam no OBS, até em 3D",
       "Manda a câmera do 3DS para o OBS do PC.\nTraseira, frontal ou as duas em 3D.",
-      IC_CAMERA, COR_CORAL, COR_CORAL_CL, modCamera, true },
+      IC_CAMERA, COR_CORAL, COR_CORAL_CL, modCamera, true, false, NULL },
     { "Espelho", "Uma janela do PC aqui",
       "Mostra uma janela do PC na tela de cima, com\nzoom (R/L). Na aba Clicar, toque para clicar.",
-      IC_ESPELHO, COR_AZUL, COR_AZUL_CL, modEspelho, true },
+      IC_ESPELHO, COR_AZUL, COR_AZUL_CL, modEspelho, true, false, NULL },
     { "Steam", "Seus jogos do PC aqui",
       "A biblioteca da Steam do PC. Escolha um jogo:\nele abre no PC e aparece na tela de cima,\ncom os botões do 3DS como controle.",
-      IC_PLAY, COR_STEAM, COR_STEAM_CL, modSteam, true },
+      IC_PLAY, COR_STEAM, COR_STEAM_CL, modSteam, true, false, NULL },
     { "Bichinho", "Mora no 3DS, sente o PC",
       "Um bichinho que dança com a música do PC, sua\ncom a CPU quente e dorme com o PC parado.\nDê comida e faça carinho com a caneta.",
-      IC_BICHO, COR_BICHO, COR_BICHO_CL, modBicho, false },
+      IC_BICHO, COR_BICHO, COR_BICHO_CL, modBicho, false, true, NULL },
     { "Pescaria", "Peixes na TV, vara no 3DS",
       "Os peixes nadam no monitor do PC. Mire com o\ncircle pad, balance o 3DS para lançar e gire a\ncaneta para puxar. Dá para jogar em vários.",
-      IC_PEIXE, COR_PESCA, COR_PESCA_CL, modPescaria, true },
+      IC_PEIXE, COR_PESCA, COR_PESCA_CL, modPescaria, true, false, NULL },
     { "Karaokê", "Cante com a música do PC",
       "Toque uma música no PC (Spotify, YouTube...):\na letra rola aqui e o PC dá nota para a sua\nafinação no microfone do 3DS.",
-      IC_MICROFONE, COR_KARAOKE, COR_KARAOKE_CL, modKaraoke, true },
+      IC_MICROFONE, COR_KARAOKE, COR_KARAOKE_CL, modKaraoke, true, false, NULL },
     { "Ajustes", "PC, atualização e giroscópio",
       "Procurar o PC, atualizar o app pelo Wi-Fi e\najustar o giroscópio e o touchpad.",
-      IC_ENGRENAGEM, COR_CARTAO2, COR_TEXTO2, modAjustes, false },
+      IC_ENGRENAGEM, COR_CARTAO2, COR_TEXTO2, modAjustes, false, true, NULL },
 };
 #define N_ITENS (int)(sizeof(itens) / sizeof(itens[0]))
 #define ITEM_AJUSTES (N_ITENS - 1)
@@ -208,7 +212,12 @@ static void desenharMenu(int sel, bool temIP) {
     uiRetArred(16, 36, 64, 64, 16, it->cor);
     uiIcone(it->icone, 48, 68, 38, COR_BRANCO, it->cor);
     uiTexto(94, 42, 22, COR_TEXTO, ESQ, 290, "%s", it->nome);
-    uiTexto(94, 72, 13, it->corClara, ESQ, 290, "%s", it->subtitulo);
+    bool cel = alvoCelular();
+    uiTexto(94, 72, 13, it->corClara, ESQ, 290, "%s", cel && it->subCelular ? it->subCelular : it->subtitulo);
+    if (cel && !it->noCelular) {
+        uiRetArred(94, 92, 150, 18, 9, COR_CARTAO2);
+        uiTexto(169, 94, 11, COR_TEXTO2, CENTRO, 0, "Só com o PC, por enquanto");
+    }
     uiTexto(16, 114, 13, COR_TEXTO2, ESQ, 0, "%s", it->descricao);
 
     if (osGetTime() < avisoAte) {
@@ -219,14 +228,15 @@ static void desenharMenu(int sel, bool temIP) {
 
     // rodapé: qual PC e se o Hub respondeu
     uiRet(16, 202, 368, 1, COR_LINHA);
-    uiIcone(IC_PC, 26, 220, 14, COR_MUDO, COR_FUNDO);
+    uiIcone(IC_PC, 26, 220, 14, COR_MUDO, COR_FUNDO);   // (o mesmo ícone para PC e celular)
     if (modoRemoto)     uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "%s (pela internet)", nomePC[0] ? nomePC : "PC");
     else if (!ipPC[0])  uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "PC: procurando...");
     else if (nomePC[0]) uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "%s (%s)", nomePC, ipPC);
     else                uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "PC %s", ipPC);
     bool hubOk = hubRespondendo();
     u32 cor = !temIP ? COR_VERMELHO : hubOk ? COR_AGUA_CL : COR_AMARELO;
-    const char *estado = !temIP ? "3DS sem Wi-Fi" : hubOk ? (modoRemoto ? "Conectado pela internet" : "Hub encontrado")
+    const char *estado = !temIP ? "3DS sem Wi-Fi" : hubOk ? (modoRemoto ? "Conectado pela internet"
+                                                                          : alvoCelular() ? "Celular encontrado" : "Hub encontrado")
                                                           : (modoRemoto ? "Conectando pela internet..." : "Procurando o Hub...");
     float w = uiTexto(384, 212, 13, cor, DIR, 0, "%s", estado);
     uiIcone(hubOk && temIP ? IC_OK : IC_X, 384 - w - 10, 220, 12, cor, COR_FUNDO);
@@ -310,7 +320,10 @@ int main(int argc, char **argv) {
 
         if (abrir >= 0) {
             const Item *it = &itens[abrir];
-            if (it->precisaPC && !rede) {
+            if (alvoCelular() && !it->noCelular) {
+                uiAviso(it->nome, "Este módulo ainda só funciona com o PC.\n"
+                        "Ele chega ao app do celular numa\nversão futura.", it->icone, it->cor);
+            } else if (it->precisaPC && !rede) {
                 uiAviso("Rede do 3DS", "Não consegui iniciar a rede do 3DS.\nReinicie o app.", IC_X, COR_VERMELHO);
             } else if (it->precisaPC && !modoRemoto && !ipPC[0] && !pedirIP()) {
                 // ainda sem PC e cancelou o IP: continua no menu (a descoberta segue tentando)

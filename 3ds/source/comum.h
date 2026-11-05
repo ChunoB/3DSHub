@@ -11,6 +11,9 @@
 extern char ipPC[32];
 extern struct in_addr enderecoPC;
 extern char nomePC[32];             // nome do PC que respondeu à descoberta ("" = não sabe)
+// Do outro lado está o app 3DS Hub do celular (Android) e não o do PC.
+// O celular responde à descoberta com um nome que começa com "Celular".
+bool alvoCelular(void);
 extern char caminhoApp[256];        // onde está o .3dsx que está rodando (para a atualização)
 extern bool sairDoApp;              // um módulo pediu para fechar o app (ex.: depois de atualizar)
 
