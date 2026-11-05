@@ -75,6 +75,11 @@ public class HubService extends Service {
         karaoke.start();
         controle = new Controle(this);
         controle.start();
+        // o que já se descobriu sobre calar este celular (ver Som)
+        android.content.SharedPreferences sp = getSharedPreferences("som", MODE_PRIVATE);
+        Estado.calarNaoFunciona = sp.getBoolean("calarNaoFunciona", false);
+        Estado.baixoNaoFunciona = sp.getBoolean("baixoNaoFunciona", false);
+        Estado.querCalar = getSharedPreferences("MainActivity", MODE_PRIVATE).getBoolean("calar", true);
         Estado.servicoRodando = true;
         handler.postDelayed(this::vigiar, 1000);
     }
@@ -110,6 +115,11 @@ public class HubService extends Service {
 
     /** Atualiza a notificação quando o 3DS conecta ou sai. */
     private void vigiar() {
+        android.content.SharedPreferences sp = getSharedPreferences("som", MODE_PRIVATE);
+        if (sp.getBoolean("calarNaoFunciona", false) != Estado.calarNaoFunciona
+                || sp.getBoolean("baixoNaoFunciona", false) != Estado.baixoNaoFunciona)
+            sp.edit().putBoolean("calarNaoFunciona", Estado.calarNaoFunciona)
+                     .putBoolean("baixoNaoFunciona", Estado.baixoNaoFunciona).apply();
         boolean c = Estado.conectado();
         if (c != ultimoConectado) {
             ultimoConectado = c;

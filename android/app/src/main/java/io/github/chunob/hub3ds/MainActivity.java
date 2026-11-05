@@ -137,6 +137,7 @@ public class MainActivity extends Activity {
         calar.setOnCheckedChangeListener((chave, ligado) -> {
             Estado.querCalar = ligado;
             Estado.calarNaoFunciona = false;
+            Estado.baixoNaoFunciona = false;
             getPreferences(MODE_PRIVATE).edit().putBoolean("calar", ligado).apply();
         });
         c3.addView(calar);
@@ -219,7 +220,8 @@ public class MainActivity extends Activity {
             else if (Estado.somBloqueado) s = "O app que está tocando não deixa mandar o som dele (o Spotify faz isso). Ele continua no celular.";
             else if (Estado.calado) s = "Mandando o som para o 3DS. O celular está mudo: o volume agora é o do 3DS.";
             else s = "Mandando o som para o 3DS.";
-            if (Estado.calarNaoFunciona) s += "\nNeste celular, calar o celular calava o 3DS também, então o som sai nos dois.";
+            if (Estado.baixoNaoFunciona) s += "\nNeste celular não deu para calar sem calar o 3DS junto, então o som sai nos dois.";
+            else if (Estado.modoBaixo) s += "\nNeste celular o mudo calava o 3DS junto: o celular fica no volume mínimo.";
             if (!Estado.erroSom.isEmpty()) s += "\nErro: " + Estado.erroSom;
             somTexto.setText(s);
             handler.postDelayed(this, 500);

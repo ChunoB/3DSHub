@@ -28,14 +28,15 @@ import java.net.SocketTimeoutException;
  * Alguns apps proíbem a captura do som deles (o Spotify, por exemplo); aí o 3DS
  * recebe silêncio e a Segunda Tela avisa.
  *
- * Enquanto o som vai para o 3DS, o celular fica mudo (opção do app). O Android grava
- * o som antes do volume do celular, então o 3DS continua ouvindo; se num celular isso
- * não for verdade (a captura fica muda junto), o app percebe e devolve o som.
+ * Enquanto o som vai para o 3DS, o celular fica mudo (opção do app). Em alguns
+ * celulares a captura pega o som antes do volume e o 3DS continua ouvindo. Em outros
+ * ela pega depois, e o mudo cala o 3DS junto: o app percebe e passa a usar o volume
+ * mínimo do celular (quase inaudível), compensando com mais ganho para o 3DS.
  */
 final class Som {
     static final int PORTA = 5013;
     private static final int TAXA_SAIDA = 22050, TAXA_ENTRADA = 48000, AMOSTRAS = 512;
-    private static final float GANHO_MAXIMO = 8f, ALVO = 0.9f;
+    private static final float GANHO_MAXIMO = 8f, GANHO_MAXIMO_BAIXO = 160f, ALVO = 0.9f;
 
     private final MediaProjection projecao;
     private final AudioManager audio;
@@ -51,16 +52,31 @@ final class Som {
     }
 
     // ------------------------------------------------------------ celular mudo
+    private int volumeGuardado = -1;
+
     private void calar() {
-        if (Estado.calado || !Estado.querCalar || Estado.calarNaoFunciona || Estado.somBloqueado) return;
-        audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0);
+        if (Estado.calado || !Estado.querCalar || Estado.baixoNaoFunciona || Estado.somBloqueado) return;
+        if (!Estado.calarNaoFunciona) {
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0);
+            Estado.modoBaixo = false;
+        } else {
+            volumeGuardado = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+            audio.setStreamVolume(AudioManager.STREAM_MUSIC, Math.max(1, audio.getStreamMinVolume(AudioManager.STREAM_MUSIC)), 0);
+            Estado.modoBaixo = true;
+        }
         Estado.calado = true;
     }
 
     private void descalar() {
         if (!Estado.calado) return;
         Estado.calado = false;
-        audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0);
+        if (Estado.modoBaixo) {
+            if (volumeGuardado >= 0) audio.setStreamVolume(AudioManager.STREAM_MUSIC, volumeGuardado, 0);
+            volumeGuardado = -1;
+        } else {
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0);
+        }
+        Estado.modoBaixo = false;
     }
 
     /** O 3DS está pedindo o som agora. */
@@ -189,13 +205,16 @@ final class Som {
             int maior = 0;
             for (int i = 0; i < n; i++) maior = Math.max(maior, Math.abs((int) entrada[i]));
             if (maior > 3) ultimoSom = agora;
-            boolean querMudo = querido && Estado.querCalar && !Estado.somBloqueado && !Estado.calarNaoFunciona;
+            boolean querMudo = querido && Estado.querCalar && !Estado.somBloqueado && !Estado.baixoNaoFunciona;
             if (querMudo && !Estado.calado) { calar(); caladoDesde = agora; }
             else if (!querMudo && Estado.calado) descalar();
             if (Estado.calado && audio.isMusicActive() && agora - caladoDesde > 4000 && agora - ultimoSom > 4000) {
-                // tocando, mas a captura ficou muda desde que calou: neste celular não dá
-                Estado.calarNaoFunciona = true;
+                // tocando, mas a captura ficou muda desde que calou: o mudo não serve neste
+                // celular (tenta o volume mínimo); se nem ele serve, o som sai nos dois
+                if (Estado.modoBaixo) Estado.baixoNaoFunciona = true;
+                else Estado.calarNaoFunciona = true;
                 descalar();
+                pico = 0;
             }
             float volume = Estado.calado ? Estado.volume3ds / 100f : 1f;
             boolean karaoke = Karaoke.querOuvir();
@@ -220,7 +239,8 @@ final class Som {
                 // ganho automático (sobe devagar, desce na hora) + limitador suave, como no PC
                 float a = Math.abs(x);
                 pico = Math.max(a, pico * 0.999994f);
-                float alvo = Math.min(GANHO_MAXIMO, ALVO / Math.max(pico, 1e-4f));
+                float maximo = Estado.modoBaixo ? GANHO_MAXIMO_BAIXO : GANHO_MAXIMO;
+                float alvo = Math.min(maximo, ALVO / Math.max(pico, 1e-5f));
                 ganho = alvo < ganho ? alvo : ganho + (alvo - ganho) * 0.00012f;
                 float y = Math.max(-1.5f, Math.min(1.5f, x * ganho));
                 y = y - y * y * y / 6.75f;
