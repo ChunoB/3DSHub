@@ -44,6 +44,14 @@ ESTRUTURA
   pc\som.py               porta 5013 (UDP) - o som do PC (loopback) compactado para o 3DS
   pc\util.py              teclado/mouse, cliques, IPs do PC
 
+  android\                app do celular (Java, sem bibliotecas extras): responde nas
+                          mesmas portas do PC, com os mesmos protocolos: Controle (5005,
+                          toques pela acessibilidade), Segunda Tela (5006), Camera (5007),
+                          Espelho (5008), Descoberta (5009), Som (5013), Bichinho (5014),
+                          Pescaria (5015) e Karaoke (5016). O nome na descoberta comeca
+                          com "Celular": e assim que o 3DS sabe que e um celular
+                          (alvoCelular() em comum.c).
+
 COMPILAR O APP DO 3DS (Windows)
 1. Instale o devkitPro (https://github.com/devkitPro/installer/releases)
    marcando "3DS Development".
@@ -66,3 +74,26 @@ GERAR O CIA (opcional, para o HOME Menu)
 RODAR O SERVIDOR DO PC
   Python 3 + "pc\instalar.bat" (instala tudo e abre o Hub).
   Para ver os logs na tela:  py pc\hub.py
+
+COMPILAR O APP DO CELULAR (Android)
+  Com o Android Studio: abra a pasta android e use Build > Build APK.
+  Pela linha de comando (JDK 17 e Android SDK instalados):
+     cd android
+     gradlew assembleRelease
+  Sai android\app\build\outputs\apk\release\app-release.apk. Para cada versao
+  nova instalar por cima da antiga, use sempre a mesma chave: coloque a pasta
+  "chave" (3dshub-celular.jks + chave.properties) dentro de android. Ela nao vai
+  para o GitHub. Sem ela o APK sai com a chave de teste do Android.
+
+  O GitHub Actions (.github/workflows/compilar.yml) gera o .3dsx, o .cia e o
+  .apk a cada envio que mexe em 3ds/ ou android/, como artefatos para testar.
+
+PUBLICAR UMA VERSAO
+  1. Suba a versao no Makefile do 3DS (VERSION_MAJOR/MINOR/MICRO) e, se o app do
+     celular mudou, compile o APK com a chave e copie para
+     android\release\3dshub-celular.apk (o APK publicado precisa da chave do
+     projeto, que nao fica no GitHub; por isso ele vai pronto no repositorio).
+  2. No GitHub: Actions > Publicar > Run workflow, com a versao (ex.: 1.13.0) e
+     as novidades. Ele compila o .3dsx e o .cia, monta o 3dshub-pacote.zip (com o
+     APK e a pasta pc) e cria a release vX.Y.Z com os quatro arquivos.
+     O app do 3DS de todo mundo oferece a atualizacao a partir dela.

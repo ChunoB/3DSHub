@@ -1,6 +1,9 @@
 // 3DS Hub — menu que junta Controle, Segunda Tela, Sintetizador, Câmera, Espelho, Steam e Ajustes.
+// Do outro lado pode estar o PC (pasta pc) ou o celular (pasta android): o celular
+// responde nas mesmas portas, e os módulos que ele ainda não tem avisam isso.
 //
-// Menu: cruz ou toque = escolher, A = abrir, Y = Ajustes, START = sair
+// Menu: cruz ou toque = escolher, A = abrir, Y = Ajustes, SELECT = escolher o PC ou
+// celular, START duas vezes = sair
 //
 // O menu procura o PC sozinho (descoberta na rede) sempre que o Hub não responde.
 
@@ -26,39 +29,41 @@ typedef struct {
     u32 cor, corClara;
     void (*abrir)(void);
     bool precisaPC;
+    bool noCelular;             // já funciona com o app do celular (Android)
+    const char *subCelular;     // subtítulo quando o 3DS está ligado ao celular (NULL = o mesmo)
 } Item;
 
 static const Item itens[] = {
     { "Controle", "Xbox, teclado e mouse no PC",
       "Use o 3DS como controle de Xbox, teclado ou\ntouchpad. Mira por giroscópio com SELECT+B.",
-      IC_CONTROLE, COR_ROXO, COR_ROXO_CL, modControle, true },
+      IC_CONTROLE, COR_ROXO, COR_ROXO_CL, modControle, true, true, "Botões do 3DS viram toques no celular" },
     { "Segunda Tela", "Gráficos, música e atalhos",
       "CPU, GPU, RAM e rede do PC em tempo real,\ncontrole de música e volume e atalhos.",
-      IC_GRAFICO, COR_VERDE_AGUA, COR_AGUA_CL, modTela, true },
+      IC_GRAFICO, COR_VERDE_AGUA, COR_AGUA_CL, modTela, true, true, "Música, som e bateria do celular" },
     { "Sintetizador", "Teclado e theremin",
       "Toque na tela de baixo para tocar. Inclinar\no console entorta a nota. Não precisa do PC.",
-      IC_PIANO, COR_ROSA, COR_ROSA_CL, modSintetizador, false },
+      IC_PIANO, COR_ROSA, COR_ROSA_CL, modSintetizador, false, true, NULL },
     { "Câmera", "Webcam no OBS, até em 3D",
       "Manda a câmera do 3DS para o OBS do PC.\nTraseira, frontal ou as duas em 3D.",
-      IC_CAMERA, COR_CORAL, COR_CORAL_CL, modCamera, true },
+      IC_CAMERA, COR_CORAL, COR_CORAL_CL, modCamera, true, true, "Câmera do 3DS no celular" },
     { "Espelho", "Uma janela do PC aqui",
       "Mostra uma janela do PC na tela de cima, com\nzoom (R/L). Na aba Clicar, toque para clicar.",
-      IC_ESPELHO, COR_AZUL, COR_AZUL_CL, modEspelho, true },
+      IC_ESPELHO, COR_AZUL, COR_AZUL_CL, modEspelho, true, true, "A tela do celular aqui" },
     { "Steam", "Seus jogos do PC aqui",
       "A biblioteca da Steam do PC. Escolha um jogo:\nele abre no PC e aparece na tela de cima,\ncom os botões do 3DS como controle.",
-      IC_PLAY, COR_STEAM, COR_STEAM_CL, modSteam, true },
+      IC_PLAY, COR_STEAM, COR_STEAM_CL, modSteam, true, false, NULL },
     { "Bichinho", "Mora no 3DS, sente o PC",
       "Um bichinho que dança com a música do PC, sua\ncom a CPU quente e dorme com o PC parado.\nDê comida e faça carinho com a caneta.",
-      IC_BICHO, COR_BICHO, COR_BICHO_CL, modBicho, false },
+      IC_BICHO, COR_BICHO, COR_BICHO_CL, modBicho, false, true, "Mora no 3DS, sente o celular" },
     { "Pescaria", "Peixes na TV, vara no 3DS",
       "Os peixes nadam no monitor do PC. Mire com o\ncircle pad, balance o 3DS para lançar e gire a\ncaneta para puxar. Dá para jogar em vários.",
-      IC_PEIXE, COR_PESCA, COR_PESCA_CL, modPescaria, true },
+      IC_PEIXE, COR_PESCA, COR_PESCA_CL, modPescaria, true, true, "Peixes no celular, vara no 3DS" },
     { "Karaokê", "Cante com a música do PC",
       "Toque uma música no PC (Spotify, YouTube...):\na letra rola aqui e o PC dá nota para a sua\nafinação no microfone do 3DS.",
-      IC_MICROFONE, COR_KARAOKE, COR_KARAOKE_CL, modKaraoke, true },
+      IC_MICROFONE, COR_KARAOKE, COR_KARAOKE_CL, modKaraoke, true, true, "Cante com a música do celular" },
     { "Ajustes", "PC, atualização e giroscópio",
       "Procurar o PC, atualizar o app pelo Wi-Fi e\najustar o giroscópio e o touchpad.",
-      IC_ENGRENAGEM, COR_CARTAO2, COR_TEXTO2, modAjustes, false },
+      IC_ENGRENAGEM, COR_CARTAO2, COR_TEXTO2, modAjustes, false, true, NULL },
 };
 #define N_ITENS (int)(sizeof(itens) / sizeof(itens[0]))
 #define ITEM_AJUSTES (N_ITENS - 1)
@@ -80,6 +85,7 @@ static u64 ultimaRespostaHub;
 static int descoberta = -1;
 static char aviso[64];          // "PC encontrado: ..." por alguns segundos
 static u64 avisoAte;
+static bool outroNaRede;        // o aparelho escolhido não responde, mas há outro na rede
 static bool hubRespondendo(void);
 
 static void abrirSonda(void) {
@@ -161,12 +167,13 @@ static bool hubRespondendo(void) {
 // ---------------------------------------------------------------- descoberta
 
 
-// Pergunta de vez em quando quem é o 3DS Hub da rede. Só troca de PC sozinho
-// quando o PC atual não responde (ou ainda não tem IP): assim, com dois PCs
-// na mesma rede, ele não fica pulando de um para o outro.
+// Pergunta de vez em quando quem é o 3DS Hub da rede. O 3DS fica com o aparelho
+// escolhido (PC ou celular): só pega um sozinho quando ainda não tem nenhum, e só
+// segue o mesmo aparelho se o IP dele mudou. Trocar de aparelho é com SELECT.
 static void rodarDescoberta(u32 quadro) {
     if (descoberta < 0) return;
     bool hubOk = hubRespondendo();
+    if (hubOk) outroNaRede = false;
     if (quadro % 120 == 30 && (!hubOk || modoRemoto || !ipPC[0] || !nomePC[0])) descobertaPerguntar(descoberta);
 
     char ip[32], nome[32];
@@ -184,20 +191,25 @@ static void rodarDescoberta(u32 quadro) {
             snprintf(aviso, sizeof(aviso), "PC na mesma rede: conexão direta");
             avisoAte = osGetTime() + 4000;
         } else if (!strcmp(ip, ipPC)) {
-            snprintf(nomePC, sizeof(nomePC), "%s", nome);   // o mesmo PC: só aprende o nome
-        } else if (!ipPC[0] || !hubOk) {
+            snprintf(nomePC, sizeof(nomePC), "%s", nome);   // o mesmo aparelho: só aprende o nome
+        } else if (!ipPC[0] || (!hubOk && (!nomePC[0] || !strcmp(nome, nomePC)))) {
+            // primeiro aparelho, IP digitado que não responde, ou o escolhido com IP novo
             fecharSonda();
             definirIP(ip);
             snprintf(nomePC, sizeof(nomePC), "%s", nome);
             ultimaRespostaHub = 0;
             abrirSonda();
-            snprintf(aviso, sizeof(aviso), "PC encontrado: %s", nome);
+            snprintf(aviso, sizeof(aviso), "Encontrado: %s", nome);
             avisoAte = osGetTime() + 4000;
+        } else if (!hubOk) {
+            outroNaRede = true;      // não troca sozinho: o menu sugere o SELECT
         }
     }
 }
 
 // ---------------------------------------------------------------- desenho
+
+static u64 confirmarSaidaAte;   // primeiro START: pede o segundo para sair
 
 static void desenharMenu(int sel, bool temIP) {
     const Item *it = &itens[sel];
@@ -208,25 +220,39 @@ static void desenharMenu(int sel, bool temIP) {
     uiRetArred(16, 36, 64, 64, 16, it->cor);
     uiIcone(it->icone, 48, 68, 38, COR_BRANCO, it->cor);
     uiTexto(94, 42, 22, COR_TEXTO, ESQ, 290, "%s", it->nome);
-    uiTexto(94, 72, 13, it->corClara, ESQ, 290, "%s", it->subtitulo);
+    bool cel = alvoCelular();
+    uiTexto(94, 72, 13, it->corClara, ESQ, 290, "%s", cel && it->subCelular ? it->subCelular : it->subtitulo);
+    if (cel && !it->noCelular) {
+        uiRetArred(94, 92, 150, 18, 9, COR_CARTAO2);
+        uiTexto(169, 94, 11, COR_TEXTO2, CENTRO, 0, "Só com o PC");
+    }
     uiTexto(16, 114, 13, COR_TEXTO2, ESQ, 0, "%s", it->descricao);
 
-    if (osGetTime() < avisoAte) {
+    if (osGetTime() < confirmarSaidaAte) {
+        uiRetArred(16, 166, 368, 28, 10, COR_CARTAO2);
+        uiTexto(200, 172, 13, COR_TEXTO, CENTRO, 340, "Aperte START de novo para sair do 3DS Hub");
+    } else if (osGetTime() < avisoAte) {
         uiRetArred(16, 166, 368, 28, 10, HEX(0x085041));
         uiIcone(IC_OK, 32, 180, 14, COR_AGUA_CL, HEX(0x085041));
         uiTexto(46, 172, 13, COR_AGUA_CL, ESQ, 330, "%s", aviso);
+    } else if (outroNaRede && temIP) {
+        uiRetArred(16, 166, 368, 28, 10, HEX(0x4A3410));
+        uiTexto(200, 172, 13, COR_AMARELO, CENTRO, 340, "Não responde. SELECT escolhe outro aparelho");
+    } else {
+        uiTexto(384, 184, 11, COR_MUDO, DIR, 0, "SELECT: trocar de PC ou celular");
     }
 
     // rodapé: qual PC e se o Hub respondeu
     uiRet(16, 202, 368, 1, COR_LINHA);
-    uiIcone(IC_PC, 26, 220, 14, COR_MUDO, COR_FUNDO);
+    uiIcone(IC_PC, 26, 220, 14, COR_MUDO, COR_FUNDO);   // (o mesmo ícone para PC e celular)
     if (modoRemoto)     uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "%s (pela internet)", nomePC[0] ? nomePC : "PC");
     else if (!ipPC[0])  uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "PC: procurando...");
     else if (nomePC[0]) uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "%s (%s)", nomePC, ipPC);
     else                uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "PC %s", ipPC);
     bool hubOk = hubRespondendo();
     u32 cor = !temIP ? COR_VERMELHO : hubOk ? COR_AGUA_CL : COR_AMARELO;
-    const char *estado = !temIP ? "3DS sem Wi-Fi" : hubOk ? (modoRemoto ? "Conectado pela internet" : "Hub encontrado")
+    const char *estado = !temIP ? "3DS sem Wi-Fi" : hubOk ? (modoRemoto ? "Conectado pela internet"
+                                                                          : alvoCelular() ? "Celular encontrado" : "Hub encontrado")
                                                           : (modoRemoto ? "Conectando pela internet..." : "Procurando o Hub...");
     float w = uiTexto(384, 212, 13, cor, DIR, 0, "%s", estado);
     uiIcone(hubOk && temIP ? IC_OK : IC_X, 384 - w - 10, 220, 12, cor, COR_FUNDO);
@@ -266,14 +292,35 @@ int main(int argc, char **argv) {
     int sel = 0;
     u32 quadro = 0;
     bool temIP = false;
+    bool esperarSoltarStart = false;    // o START que fechou um módulo ainda está apertado
 
     while (aptMainLoop() && !sairDoApp) {
         hidScanInput();
         u32 down = hidKeysDown();
         int abrir = -1;
 
-        // apertouStart: START durante uma conexão pela internet (que segura o menu)
-        if ((down & KEY_START) || apertouStart) break;
+        if (esperarSoltarStart) {
+            if (hidKeysHeld() & KEY_START) down &= ~KEY_START;
+            else esperarSoltarStart = false;
+        }
+        // sair pede dois toques no START. apertouStart: START durante uma espera da
+        // conexão pela internet (que segura o menu) conta como o primeiro toque.
+        if ((down & KEY_START) || apertouStart) {
+            apertouStart = false;
+            if (osGetTime() < confirmarSaidaAte) break;
+            confirmarSaidaAte = osGetTime() + 2500;
+        }
+        if ((down & KEY_SELECT) && rede) {
+            escolherAparelho();
+            if (aptShouldClose()) break;
+            fecharSondaDeVez();
+            ultimaRespostaHub = 0;
+            outroNaRede = false;
+            redeMudou = false;
+            if (modoRemoto) mensagemRapida("Conectando pela internet...", nomePC);
+            abrirSonda();
+            esperarSoltarStart = true;
+        }
         if (down & KEY_DLEFT)  sel = sel % 2 ? sel - 1 : sel;
         if (down & KEY_DRIGHT) sel = sel % 2 || sel + 1 >= N_ITENS ? sel : sel + 1;
         if (down & KEY_DUP)    sel = sel >= 2 ? sel - 2 : sel;
@@ -310,7 +357,9 @@ int main(int argc, char **argv) {
 
         if (abrir >= 0) {
             const Item *it = &itens[abrir];
-            if (it->precisaPC && !rede) {
+            if (alvoCelular() && !it->noCelular) {
+                uiAviso(it->nome, "Este módulo só funciona com o PC.", it->icone, it->cor);
+            } else if (it->precisaPC && !rede) {
                 uiAviso("Rede do 3DS", "Não consegui iniciar a rede do 3DS.\nReinicie o app.", IC_X, COR_VERMELHO);
             } else if (it->precisaPC && !modoRemoto && !ipPC[0] && !pedirIP()) {
                 // ainda sem PC e cancelou o IP: continua no menu (a descoberta segue tentando)
@@ -319,6 +368,7 @@ int main(int argc, char **argv) {
                 it->abrir();
                 if (aptShouldClose()) break;   // fechado pelo HOME dentro do módulo: sai já
                 apertouStart = false;       // o START dentro do módulo era para sair dele
+                esperarSoltarStart = true;
                 ultimaRespostaHub = 0;
                 if (redeMudou) {            // nos Ajustes escolheu outro PC (ou casa/internet)
                     redeMudou = false;

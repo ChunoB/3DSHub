@@ -1,0 +1,49 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "io.github.chunob.hub3ds"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "io.github.chunob.hub3ds"
+        minSdk 29          // Android 10: o primeiro que deixa capturar o som de outros apps
+        targetSdk 34
+        versionCode 5
+        versionName "1.13.0"
+    }
+
+    // A chave fica fora do repositório (pasta android/chave, ignorada pelo git).
+    // Com ela, cada versão nova instala por cima da antiga. Sem ela (ex.: no GitHub
+    // Actions), o APK sai com a chave de teste do Android.
+    def arqChave = rootProject.file("chave/chave.properties")
+    def temChave = arqChave.exists()
+    signingConfigs {
+        if (temChave) {
+            def p = new Properties()
+            arqChave.withInputStream { p.load(it) }
+            app {
+                storeFile rootProject.file("chave/" + p["storeFile"])
+                storePassword p["storePassword"]
+                keyAlias p["keyAlias"]
+                keyPassword p["keyPassword"]
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig temChave ? signingConfigs.app : signingConfigs.debug
+        }
+        debug {
+            if (temChave) signingConfig signingConfigs.app
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

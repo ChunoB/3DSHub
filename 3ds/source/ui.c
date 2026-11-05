@@ -19,6 +19,8 @@ static float alturaLinha = 30;   // altura de linha da fonte do sistema, em pixe
 static u32 quadro;
 static char hora[8] = "--:--";
 static u8 bateria = 5, carregando = 0, wifi = 0;
+static bool mcuOk;
+static u8 porcento = 0xFF;                   // bateria de 0 a 100 (0xFF = não sabe)
 static bool temIP;
 
 // ---------------------------------------------------------------- telas
@@ -34,10 +36,12 @@ void uiIniciar(void) {
     FINF_s *info = C2D_FontGetInfo(NULL);
     if (info && info->lineFeed) alturaLinha = info->lineFeed;
     ptmuInit();
+    mcuOk = R_SUCCEEDED(mcuHwcInit());       // porcentagem exata da bateria
 }
 
 void uiEncerrar(void) {
     ptmuExit();
+    if (mcuOk) mcuHwcExit();
     C2D_TextBufDelete(bufTexto);
     C2D_Fini();
     C3D_Fini();
@@ -49,6 +53,7 @@ static void atualizarStatus(void) {
     if (tm) strftime(hora, sizeof(hora), "%H:%M", tm);
     PTMU_GetBatteryLevel(&bateria);          // 0 a 5
     PTMU_GetBatteryChargeState(&carregando);
+    if (!mcuOk || R_FAILED(MCUHWC_GetBatteryLevel(&porcento)) || porcento > 100) porcento = 0xFF;
     wifi = osGetWifiStrength();              // 0 a 3
     temIP = gethostid() != 0;
 }
@@ -378,18 +383,26 @@ void uiBarraStatus(const char *titulo, int icone, u32 cor) {
     uiRet(bx, by, 20, 10, COR_MUDO);
     uiRet(bx + 1.3f, by + 1.3f, 17.4f, 7.4f, COR_BARRA);
     uiRet(bx + 20, by + 3, 1.8f, 4, COR_MUDO);
-    float nivel = bateria > 5 ? 1 : bateria / 5.0f;
-    uiRet(bx + 2.3f, by + 2.3f, 15.4f * nivel, 5.4f, bateria <= 1 ? COR_VERMELHO : COR_TEXTO2);
-    if (carregando) uiIcone(IC_RAIO, bx - 7, UI_BARRA / 2, 12, COR_AMARELO, COR_BARRA);
+    float nivel = porcento <= 100 ? porcento / 100.0f : bateria > 5 ? 1 : bateria / 5.0f;
+    bool baixa = porcento <= 100 ? porcento <= 15 : bateria <= 1;
+    uiRet(bx + 2.3f, by + 2.3f, 15.4f * nivel, 5.4f, baixa ? COR_VERMELHO : COR_TEXTO2);
+
+    // porcentagem ao lado do ícone (e o raio, carregando)
+    float x = bx - 4;
+    if (porcento <= 100) x -= uiTexto(x, 5, 12, baixa && !carregando ? COR_VERMELHO : COR_TEXTO2, DIR, 0, "%d%%", porcento) + 4;
+    if (carregando) {
+        uiIcone(IC_RAIO, x - 4, UI_BARRA / 2, 12, COR_AMARELO, COR_BARRA);
+        x -= 12;
+    }
 
     // Wi-Fi: 3 barrinhas (cinza = sem rede)
-    float wx = 344;
+    float wx = x - 18;
     for (int i = 0; i < 3; i++) {
         float h = 4 + i * 3;
         bool acesa = temIP && wifi > i;
         uiRet(wx + i * 5, 16 - h, 3.5f, h, acesa ? COR_TEXTO2 : COR_LINHA);
     }
-    uiTexto(338, 4, 14, COR_TEXTO2, DIR, 0, "%s", hora);
+    uiTexto(wx - 6, 4, 14, COR_TEXTO2, DIR, 0, "%s", hora);
 }
 
 void uiBotao(float x, float y, float w, float h, const char *rotulo, int icone,

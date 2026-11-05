@@ -1,0 +1,89 @@
+name: Publicar
+
+# Cria a release de uma versão nova: .3dsx, .cia, 3dshub-pacote.zip (com o APK do
+# celular e a pasta pc) e o APK. O app do 3DS se atualiza a partir da release mais nova.
+# Uso: Actions > Publicar > Run workflow (na main).
+on:
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: "Versão (igual à do Makefile do 3DS, ex.: 1.13.0)"
+        required: true
+      novidades:
+        description: "Texto da release (Markdown)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  compilar:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Conferir a versão
+        run: |
+          V=$(awk '/^VERSION_MAJOR/{a=$3}/^VERSION_MINOR/{b=$3}/^VERSION_MICRO/{c=$3}END{print a"."b"."c}' 3ds/Makefile)
+          if [ "$V" != "${{ inputs.versao }}" ]; then echo "O Makefile diz $V, não ${{ inputs.versao }}"; exit 1; fi
+          test -f android/release/3dshub-celular.apk
+
+      - name: makerom e bannertool
+        run: |
+          apt-get update -qq && apt-get install -y -qq python3 zip >/dev/null
+          mkdir -p /tmp/ferr /tmp/bin && cd /tmp/ferr
+          git clone -q https://github.com/3DSGuy/Project_CTR
+          git -C Project_CTR checkout -q d52c2b0e788c2d085763d7c5dcc4b2edd9ffb7d8
+          make -C Project_CTR/makerom deps -j"$(nproc)" >/dev/null
+          make -C Project_CTR/makerom program -j"$(nproc)" >/dev/null
+          cp Project_CTR/makerom/bin/makerom /tmp/bin/
+          git clone -q https://github.com/diasurgical/bannertool
+          git -C bannertool checkout -q 16d8c5a0ce02a5e06e64ab42275132fca57c04a2
+          git -C bannertool submodule update --init -q
+          make -C bannertool -j"$(nproc)" >/dev/null
+          cp bannertool/output/linux-x86_64/bannertool /tmp/bin/
+          echo "/tmp/bin" >> "$GITHUB_PATH"
+
+      - name: 3dsx e cia
+        working-directory: 3ds
+        run: |
+          make -j"$(nproc)"
+          mkdir -p build
+          bannertool makebanner -i arte/banner.png -a arte/banner.wav -o build/banner.bnr
+          bannertool makesmdh -s "3DS Hub" -l "Controle, Segunda Tela, Sintetizador, Camera, Espelho e Steam" -p "Bruno" -i arte/icon.png -o build/icon.icn
+          VMAJ=$(awk '/^VERSION_MAJOR/{print $3}' Makefile)
+          VMIN=$(awk '/^VERSION_MINOR/{print $3}' Makefile)
+          VMIC=$(awk '/^VERSION_MICRO/{print $3}' Makefile)
+          makerom -f cia -o 3dshub.cia -elf 3dshub.elf -rsf 3dshub.rsf -icon build/icon.icn -banner build/banner.bnr \
+            -exefslogo -target t -major $VMAJ -minor $VMIN -micro $VMIC
+          python3 versao_cia.py 3dshub.cia $VMAJ.$VMIN.$VMIC
+
+      - name: Pacote
+        run: |
+          python3 pacote.py
+          mkdir -p saida
+          cp dist/3dshub-pacote.zip 3ds/3dshub.3dsx 3ds/3dshub.cia android/release/3dshub-celular.apk saida/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: saida/
+
+  publicar:
+    needs: compilar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: saida
+      - name: Criar a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTAS: ${{ inputs.novidades }}
+        run: |
+          printf '%s\n' "$NOTAS" > notas.md
+          gh release create "v${{ inputs.versao }}" saida/* \
+            --repo "${{ github.repository }}" --target "${{ github.sha }}" \
+            --title "3DS Hub ${{ inputs.versao }}" --notes-file notas.md

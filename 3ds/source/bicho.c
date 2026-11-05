@@ -94,6 +94,7 @@ static struct {
     float fome, alegria;                // 0 a 100 (fome 100 = de barriga cheia)
     // o que veio do PC
     int cpu, ram, musica, ocioso, janelas, hora;
+    int celular, temp, bateria;     // do celular: "janelas" são as notificações e "cpu" vem da temperatura
     char titulo[96];
     u64 ultimoPC;                       // quando chegou a última resposta (0 = nunca)
     // animações
@@ -243,6 +244,9 @@ static void lerPC(char *t) {
         else if (!strcmp(l, "skin")) b.skinPC = strtoul(v, NULL, 10);
         else if (!strcmp(l, "hora")) b.hora = atoi(v);
         else if (!strcmp(l, "titulo")) snprintf(b.titulo, sizeof(b.titulo), "%s", v);
+        else if (!strcmp(l, "celular")) b.celular = atoi(v);
+        else if (!strcmp(l, "temp")) b.temp = atoi(v);
+        else if (!strcmp(l, "bateria")) b.bateria = atoi(v);
     }
     b.ultimoPC = osGetTime();
 }
@@ -455,7 +459,15 @@ static void desenharCima(int h, u64 agora) {
     if (baixando) {
         snprintf(buf, sizeof(buf), "Baixando a roupa nova do PC... %d%%", baixTotal ? baixParte * 100 / baixTotal : 0);
         sente = buf;
-    } else if (!comPC()) sente = "Sem sinal do PC. Ele espera você.";
+    } else if (!comPC()) sente = alvoCelular() ? "Sem sinal do celular. Ele espera você." : "Sem sinal do PC. Ele espera você.";
+    else if (b.celular) switch (h) {
+        case H_DORME: sente = b.ocioso >= 180 ? "O celular está parado... dormindo" : "Madrugada... dormindo"; break;
+        case H_BRAVO: snprintf(buf, sizeof(buf), "%d notificações! Que bagunça", b.janelas); sente = buf; break;
+        case H_CALOR: snprintf(buf, sizeof(buf), "Celular a %d °C! Que calor", b.temp); sente = buf; break;
+        case H_DANCA: snprintf(buf, sizeof(buf), "Dançando: %s", b.titulo[0] ? b.titulo : "música do celular"); sente = buf; break;
+        case H_FOME:  sente = "Com fome... arraste uma comida"; break;
+        default:      snprintf(buf, sizeof(buf), "Celular tranquilo (bateria %d%%, %d notificações)", b.bateria, b.janelas); sente = buf; break;
+    }
     else switch (h) {
         case H_DORME: sente = b.ocioso >= 180 ? "O PC está parado... dormindo" : "Madrugada... dormindo"; break;
         case H_BRAVO: snprintf(buf, sizeof(buf), "%d janelas abertas! Que bagunça", b.janelas); sente = buf; break;
@@ -600,7 +612,8 @@ void modBicho(void) {
         if (h != humorAntes && agora > b.falaAte) {
             static const char *frases[] = { "", "Tô com fome...", "Essa música é boa!", "Ufa, que calor!",
                                             "Fecha essas janelas!", "Zzz..." };
-            if (humorAntes >= 0 && frases[h][0]) falar(frases[h], 2500);
+            const char *frase = h == H_BRAVO && b.celular ? "Quanta notificação!" : frases[h];
+            if (humorAntes >= 0 && frase[0]) falar(frase, 2500);
             humorAntes = h;
         }
 

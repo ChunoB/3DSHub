@@ -647,11 +647,11 @@ static void desenharJogoCima(bool conectado) {
     uiTela(alvoCima);
     uiBarraStatus("Karaokê", IC_MICROFONE, COR_KARAOKE_CL);
     if (!conectado) {
-        uiTexto(200, 100, 16, COR_TEXTO, CENTRO, 360, "Procurando o PC...");
+        uiTexto(200, 100, 16, COR_TEXTO, CENTRO, 360, alvoCelular() ? "Procurando o celular..." : "Procurando o PC...");
         return;
     }
     if (!jg.titulo[0]) {
-        uiTexto(200, 90, 18, COR_TEXTO, CENTRO, 360, "Toque uma música no PC");
+        uiTexto(200, 90, 18, COR_TEXTO, CENTRO, 360, alvoCelular() ? "Toque uma música no celular" : "Toque uma música no PC");
         uiTexto(200, 120, 12, COR_MUDO, CENTRO, 360, "Spotify, YouTube, o que for: a letra aparece aqui");
         return;
     }
@@ -707,7 +707,7 @@ static void desenharMenuCima(bool conectado) {
     uiTela(alvoCima);
     uiBarraStatus("Karaokê", IC_MICROFONE, COR_KARAOKE_CL);
     if (!conectado) {
-        uiTexto(200, 100, 16, COR_TEXTO, CENTRO, 360, "Procurando o PC...");
+        uiTexto(200, 100, 16, COR_TEXTO, CENTRO, 360, alvoCelular() ? "Procurando o celular..." : "Procurando o PC...");
         return;
     }
     if (pcAntigo) {
@@ -721,7 +721,7 @@ static void desenharMenuCima(bool conectado) {
         uiTexto(38, UI_BARRA + 8, 15, COR_TEXTO, ESQ, 350, "%s", jg.titulo);
         uiTexto(38, UI_BARRA + 26, 11, COR_MUDO, ESQ, 350, "%s%s", jg.artista, jg.tocando ? "" : "  (pausada)");
     } else {
-        uiTexto(200, UI_BARRA + 12, 14, COR_TEXTO2, CENTRO, 380, "Toque uma música no PC (Spotify, YouTube...)");
+        uiTexto(200, UI_BARRA + 12, 14, COR_TEXTO2, CENTRO, 380, alvoCelular() ? "Toque uma música no celular (YouTube Music...)" : "Toque uma música no PC (Spotify, YouTube...)");
     }
 
     uiTexto(14, 78, 13, COR_KARAOKE_CL, ESQ, 0, "Recordes desta música");
@@ -1139,7 +1139,8 @@ void modKaraoke(void) {
                         vozN = 0;
                         ultimoJulgSeq = -1;
                     } else {
-                        aviso("O PC não respondeu. Confira se o 3DS Hub está aberto no PC.");
+                        aviso(alvoCelular() ? "O celular não respondeu. Confira se o 3DS Hub está ligado nele."
+                                              : "O PC não respondeu. Confira se o 3DS Hub está aberto no PC.");
                     }
                 }
             }

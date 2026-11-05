@@ -30,7 +30,7 @@ typedef struct {
 } Linha;
 
 static const Linha linhas[] = {
-    { PROCURAR,   "Procurar o PC na rede", NULL, NULL,
+    { PROCURAR,   "Escolher o PC ou celular", NULL, NULL,
       "Pergunta para a rede quais PCs estão com o\n3DS Hub aberto e deixa você escolher um.", 0, 0, 0 },
     { DIGITAR_IP, "Digitar o IP do PC", NULL, NULL,
       "Para quando a busca não acha o PC. O IP\naparece no menu do ícone do 3DS Hub no PC.", 0, 0, 0 },
@@ -324,7 +324,7 @@ static void ligarPC(void) {
         snprintf(texto, sizeof(texto), "Não consegui mandar o sinal.\nO 3DS está conectado no Wi-Fi?");
     else
         snprintf(texto, sizeof(texto), "Sinal mandado para %s.\n\nSe ele está suspenso, acorda em alguns\n"
-                 "segundos. Depois use \"Procurar o PC na rede\".%s", p->nome,
+                 "segundos. Depois use \"Escolher o PC ou celular\".%s", p->nome,
                  modoRemoto ? "\n\nAtenção: só funciona na rede de casa." : "");
     uiAviso("Ligar o PC", texto, IC_PC, enviados ? COR_VERDE_AGUA : COR_AMARELO);
 }
@@ -353,7 +353,7 @@ static void suspenderPC(void) {
 // Um PC pareado que também está nesta rede aparece só uma vez, pela rede (mais rápido).
 #define LINHAS_VISIVEIS 5
 
-static bool procurarPC(void) {
+bool escolherAparelho(void) {
     int s = descobertaAbrir();
     char ips[6][32], nomes[6][32];
     int n = 0, sel = 0, topo = 0;
@@ -421,14 +421,15 @@ static bool procurarPC(void) {
         uiQuadro();
         uiTela(alvoCima);
         uiBarraStatus("Ajustes", IC_ENGRENAGEM, COR_TEXTO2);
-        uiTexto(200, 70, 20, COR_TEXTO, CENTRO, 0, "%s", total ? "Escolha o PC" :
-                procurando ? "Procurando PCs..." : "Nenhum PC encontrado");
+        uiTexto(200, 70, 20, COR_TEXTO, CENTRO, 0, "%s", total ? "Escolha o PC ou o celular" :
+                procurando ? "Procurando..." : "Nada encontrado");
         uiTexto(200, 104, 13, COR_TEXTO2, CENTRO, 0, "%s", total || procurando
-                ? "Nesta rede: conexão direta (mais rápida).\nPela internet: os PCs que você pareou."
-                : "Confira se o 3DS Hub está aberto no PC e se\no 3DS e o PC estão na mesma rede (ou hotspot).");
+                ? "Nesta rede: conexão direta (mais rápida).\nPela internet: os PCs que você pareou.\n"
+                  "O 3DS fica com o escolhido até você trocar."
+                : "Confira se o 3DS Hub está aberto no PC ou no\ncelular e se estão na mesma rede (ou hotspot).");
         if (procurando && total) uiTexto(200, 150, 13, COR_MUDO, CENTRO, 0, "Ainda procurando nesta rede...");
         uiTela(alvoBaixo);
-        uiTexto(10, 12, 13, COR_MUDO, ESQ, 0, "PCs (%d)", total);
+        uiTexto(10, 12, 13, COR_MUDO, ESQ, 0, "Aparelhos (%d)", total);
         for (int i = topo; i < total && i < topo + LINHAS_VISIVEIS; i++) {
             bool s2 = i == sel;
             float y = 40 + (i - topo) * 34;
@@ -436,7 +437,7 @@ static bool procurarPC(void) {
             const char *nomeLinha = rede ? nomes[i] : tunelNomePC(remotos[i - n]);
             bool emUso = !rede ? modoRemoto && remotos[i - n] == tunelAtual() : !modoRemoto && !strcmp(ips[i], ipPC);
             uiRetArred(10, y, 300, 30, 8, s2 ? (rede ? COR_VERDE_AGUA : COR_AZUL) : COR_CARTAO);
-            uiTexto(20, y + 7, 13, s2 ? COR_BRANCO : COR_TEXTO, ESQ, 160, "%s%s", nomeLinha, emUso ? "  (em uso)" : "");
+            uiTexto(20, y + 7, 13, s2 ? COR_BRANCO : COR_TEXTO, ESQ, 170, "%s%s", nomeLinha, emUso ? "  (em uso)" : "");
             uiTexto(300, y + 7, 13, s2 ? COR_BRANCO : rede ? COR_MUDO : COR_AZUL_CL, DIR, 0, "%s", rede ? ips[i] : "pela internet");
         }
         uiTexto(160, 222, 11, COR_MUDO, CENTRO, 0, "A ou toque: escolher   B: voltar");
@@ -717,7 +718,7 @@ static void configurarRemoto(void) {
         return;
     }
     if (!nomePC[0]) snprintf(nomePC, sizeof(nomePC), "%s", nome);
-    snprintf(texto2, sizeof(texto2), "\"%s\" agora aparece em \"Procurar o PC\"\nmesmo longe de casa. O PC precisa estar\nligado com o 3DS Hub aberto.", nome);
+    snprintf(texto2, sizeof(texto2), "\"%s\" agora aparece em \"Escolher o PC\"\nmesmo longe de casa. O PC precisa estar\nligado com o 3DS Hub aberto.", nome);
     uiAviso("Pronto!", texto2, IC_OK, COR_VERDE_AGUA);
 }
 
@@ -872,7 +873,7 @@ void modAjustes(void) {
             sel = acao;
             switch (linhas[acao].tipo) {
             case PROCURAR:
-                if (procurarPC()) conectar();
+                if (escolherAparelho()) conectar();
                 break;
             case DIGITAR_IP:
                 if (pedirIP()) conectar();

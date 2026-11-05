@@ -55,8 +55,8 @@ static void desenharCima(float mira, float carga, bool carregando, u64 agora) {
 
     if (!conectado) {
         uiRetArred(30, 90, 340, 70, 12, COR_ESCURO);
-        uiTexto(200, 100, 16, COR_TEXTO, CENTRO, 320, "Procurando o PC...");
-        uiTexto(200, 126, 12, COR_MUDO, CENTRO, 320, "O lago abre numa janela no PC (F11: tela cheia)");
+        uiTexto(200, 100, 16, COR_TEXTO, CENTRO, 320, alvoCelular() ? "Procurando o celular..." : "Procurando o PC...");
+        uiTexto(200, 126, 12, COR_MUDO, CENTRO, 320, alvoCelular() ? "O lago abre na tela do celular (deite o celular)" : "O lago abre numa janela no PC (F11: tela cheia)");
         return;
     }
 

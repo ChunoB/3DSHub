@@ -10,6 +10,10 @@
 //   B                       : voltar para a lista
 //   X (na lista)            : atualizar a lista
 //   START                   : voltar ao menu
+//
+// Com o celular (app 3DS Hub do Android) a lista tem só "Tela do celular", o toque
+// vira toque no celular (segurar = toque longo) e os botões Enter/Apagar/Direito
+// viram Voltar/Início/Apps (o teclado continua com Enter e Apagar).
 
 #include "comum.h"
 
@@ -556,9 +560,11 @@ static void desenharEspelho(UiImagem *im, bool temImagem, const char *janela, fl
         uiIcone(IC_SETA_BAIXO, ROL_X + ROL_W / 2, MINI_Y + MINI_H - 22, 16, COR_MUDO, g.rolando ? COR_AZUL : COR_CARTAO2);
         uiTexto(ROL_X + ROL_W / 2, MINI_Y + MINI_H / 2 - 7, 11, COR_MUDO, CENTRO, 0, "rolar");
         static const char *rotulos[] = { "Lista", "Teclado", "Enter", "Apagar", "Direito" };
+        static const char *rotulosCel[] = { "Lista", "Teclado", "Voltar", "Início", "Apps" };
+        bool cel = alvoCelular();
         for (int i = 0; i < 5; i++) {
-            bool ligado = i == 4 && direitoArmado;
-            uiBotao(botoesClique[i].x, CBTN_Y, botoesClique[i].w, CBTN_H, rotulos[i], -1,
+            bool ligado = i == 4 && direitoArmado && !cel;
+            uiBotao(botoesClique[i].x, CBTN_Y, botoesClique[i].w, CBTN_H, cel ? rotulosCel[i] : rotulos[i], -1,
                     ligado ? COR_AZUL : COR_CARTAO, ligado ? COR_BRANCO : COR_TEXTO);
         }
         return;
@@ -704,9 +710,15 @@ void modEspelho(void) {
                     if (uiDentro(&tp, botoesClique[i].x, CBTN_Y, botoesClique[i].w, CBTN_H)) {
                         if (i == 0) voltar = true;
                         if (i == 1) abrirTeclado = true;
-                        if (i == 2) tecla = "enter";
-                        if (i == 3) tecla = "backspace";
-                        if (i == 4) direitoArmado = !direitoArmado;
+                        if (alvoCelular()) {
+                            if (i == 2) tecla = "voltar";
+                            if (i == 3) tecla = "inicio";
+                            if (i == 4) tecla = "recentes";
+                        } else {
+                            if (i == 2) tecla = "enter";
+                            if (i == 3) tecla = "backspace";
+                            if (i == 4) direitoArmado = !direitoArmado;
+                        }
                     }
             } else {
                 for (int i = 0; i < 4; i++)
