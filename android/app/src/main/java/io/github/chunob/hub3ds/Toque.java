@@ -45,13 +45,21 @@ public class Toque extends AccessibilityService {
     }
 
     // ------------------------------------------------------------ toques
+    private static float dentro(float v) { return Math.max(0, v); }
+
     static void tocar(float x, float y, boolean longo) {
         Toque t = ativo;
         if (t == null) return;
+        x = dentro(x);
+        y = dentro(y);
         Path p = new Path();
         p.moveTo(x, y);
-        t.dispatchGesture(new GestureDescription.Builder()
-                .addStroke(new GestureDescription.StrokeDescription(p, 0, longo ? 650 : 40)).build(), null, null);
+        try {
+            t.dispatchGesture(new GestureDescription.Builder()
+                    .addStroke(new GestureDescription.StrokeDescription(p, 0, longo ? 650 : 40)).build(), null, null);
+        } catch (RuntimeException e) {
+            android.util.Log.w("3dshub", "Toque", e);
+        }
     }
 
     /** Rolar: passos positivos sobem o conteúdo (o dedo desce), como a rodinha do mouse. */
@@ -64,10 +72,14 @@ public class Toque extends AccessibilityService {
         y0 = Math.max(1, Math.min(alturaTela - 2, y0));
         y1 = Math.max(1, Math.min(alturaTela - 2, y1));
         Path p = new Path();
-        p.moveTo(x, y0);
-        p.lineTo(x, y1);
-        t.dispatchGesture(new GestureDescription.Builder()
-                .addStroke(new GestureDescription.StrokeDescription(p, 0, 220)).build(), null, null);
+        p.moveTo(dentro(x), y0);
+        p.lineTo(dentro(x), y1);
+        try {
+            t.dispatchGesture(new GestureDescription.Builder()
+                    .addStroke(new GestureDescription.StrokeDescription(p, 0, 220)).build(), null, null);
+        } catch (RuntimeException e) {
+            android.util.Log.w("3dshub", "Rolar", e);
+        }
     }
 
     // ------------------------------------------------------------ dedos contínuos (Controle)
@@ -84,11 +96,24 @@ public class Toque extends AccessibilityService {
 
     /** Os dedos que devem estar na tela agora: id -> {x, y} em pixels. */
     static synchronized void dedos(Map<Integer, float[]> novos) {
-        alvo = new HashMap<>(novos);
+        alvo = new HashMap<>();
+        for (Map.Entry<Integer, float[]> e : novos.entrySet())      // o Android recusa ponto negativo
+            alvo.put(e.getKey(), new float[] { dentro(e.getValue()[0]), dentro(e.getValue()[1]) });
         if (!despachando) proximo();
     }
 
     private static synchronized void proximo() {
+        try {
+            proximoSemProteger();
+        } catch (RuntimeException e) {     // gesto recusado: recomeça os dedos do zero
+            android.util.Log.w("3dshub", "Dedos", e);
+            tracos.clear();
+            posicoes.clear();
+            despachando = false;
+        }
+    }
+
+    private static void proximoSemProteger() {
         Toque t = ativo;
         if (t == null) {
             tracos.clear();

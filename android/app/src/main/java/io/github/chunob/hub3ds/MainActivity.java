@@ -83,6 +83,35 @@ public class MainActivity extends Activity {
         col.addView(texto("no celular", 16, AGUA_CL, false));
         espaco(col, 18);
 
+        // o app fechou por um erro da última vez: mostra o motivo para mandar
+        java.io.File erro = App.arquivoErro(this);
+        if (erro.exists()) {
+            String texto;
+            try { texto = new String(java.nio.file.Files.readAllBytes(erro.toPath()), java.nio.charset.StandardCharsets.UTF_8); }
+            catch (Exception e) { texto = e.toString(); }
+            final String completo = texto;
+            LinearLayout ce = cartao(col);
+            ce.addView(texto("O app fechou por um erro", 18, 0xFFE24B4A, true));
+            TextView det = texto(texto.length() > 600 ? texto.substring(0, 600) + "..." : texto, 11, MUDO, false);
+            det.setTypeface(Typeface.MONOSPACE);
+            det.setPadding(0, dp(6), 0, dp(8));
+            ce.addView(det);
+            LinearLayout bs = new LinearLayout(this);
+            Button copiar = botao("Copiar o erro", v -> {
+                ((android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE))
+                        .setPrimaryClip(android.content.ClipData.newPlainText("erro do 3DS Hub", completo));
+                android.widget.Toast.makeText(this, "Copiado", android.widget.Toast.LENGTH_SHORT).show();
+            });
+            Button limpar = botao("Apagar", v -> { erro.delete(); ce.setVisibility(View.GONE); });
+            estiloBotao(limpar, CARTAO2, TEXTO);
+            LinearLayout.LayoutParams m1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            LinearLayout.LayoutParams m2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            m2.leftMargin = dp(8);
+            bs.addView(copiar, m1);
+            bs.addView(limpar, m2);
+            ce.addView(bs);
+        }
+
         // conexão
         LinearLayout c1 = cartao(col);
         LinearLayout linha = new LinearLayout(this);

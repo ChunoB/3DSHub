@@ -540,7 +540,7 @@ final class Karaoke extends Thread {
                     ultimoSalvar = agora();
                     salvarNotas();
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 android.util.Log.w("3dshub", "Karaokê: música", e);
             }
         }
@@ -551,7 +551,7 @@ final class Karaoke extends Thread {
         buscando.add(id);
         reprocurar.put(id, new float[] { tentativas, 0 });
         new Thread(() -> {
-            List<Letras.Linha> l = Letras.buscar(m.titulo, m.artista, m.dur);
+            List<Letras.Linha> l = Letras.buscar(m.titulo, m.artista, m.dur);   // nunca joga erro
             if (l == null && tentativas < 4) reprocurar.put(id, new float[] { tentativas + 1, agora() + 30 * (1 << tentativas) });
             letras.put(id, l == null ? new ArrayList<>() : l);
             buscando.remove(id);

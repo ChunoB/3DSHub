@@ -33,7 +33,8 @@ final class Letras {
         Linha(int ms, String texto) { this.ms = ms; this.texto = texto; }
     }
 
-    private static final int U = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.UNICODE_CHARACTER_CLASS;
+    // Sem UNICODE_CHARACTER_CLASS: o Android recusa essa opção (e lá \w e \b já entendem acentos)
+    private static final int U = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
     private static final String LIXO = "official|oficial|video|vídeo|lyric|letra|audio|áudio|clipe|ao vivo|live|hd|4k|"
             + "remaster|visualizer|\\bmv\\b|\\bdvd\\b|kondzilla";
 
@@ -205,6 +206,15 @@ final class Letras {
 
     /** A letra; lista vazia se nenhuma fonte tem; null se um site falhou (vale tentar de novo). */
     static List<Linha> buscar(String titulo, String artista, double duracao) {
+        try {
+            return buscarSemProteger(titulo, artista, duracao);
+        } catch (Throwable e) {          // um erro aqui nunca pode derrubar o app
+            android.util.Log.w("3dshub", "Karaokê: busca da letra", e);
+            return null;
+        }
+    }
+
+    private static List<Linha> buscarSemProteger(String titulo, String artista, double duracao) {
         String[] ta = limparTitulo(titulo, artista);
         if (ta[0].isEmpty()) return new ArrayList<>();
         List<String[]> pares = new ArrayList<>();

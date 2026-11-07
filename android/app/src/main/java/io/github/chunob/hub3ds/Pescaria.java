@@ -229,7 +229,11 @@ final class Pescaria extends Thread {
         while (rodando) {
             SystemClock.sleep(33);
             float agora = relogio();
-            passo(Math.min(0.1f, agora - antes), agora);
+            try {
+                passo(Math.min(0.1f, agora - antes), agora);
+            } catch (RuntimeException e) {
+                android.util.Log.w("3dshub", "Pescaria: jogo", e);
+            }
             antes = agora;
         }
     }

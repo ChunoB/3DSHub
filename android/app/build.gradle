@@ -10,8 +10,8 @@ android {
         applicationId "io.github.chunob.hub3ds"
         minSdk 29          // Android 10: o primeiro que deixa capturar o som de outros apps
         targetSdk 34
-        versionCode 5
-        versionName "1.13.0"
+        versionCode 6
+        versionName "1.13.2"
     }
 
     // A chave fica fora do repositório (pasta android/chave, ignorada pelo git).
@@ -40,6 +40,10 @@ android {
         debug {
             if (temChave) signingConfig signingConfigs.app
         }
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     compileOptions {
