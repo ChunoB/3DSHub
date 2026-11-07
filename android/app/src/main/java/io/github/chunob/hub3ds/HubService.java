@@ -39,7 +39,8 @@ public class HubService extends Service {
     private MediaProjection projecao;
     private WifiManager.MulticastLock trava;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private boolean ultimoConectado;
+    private boolean ultimoConectado, avisouSom;
+    private static final int NOTIFICACAO_SOM = 5;
 
     static void ligar(Context ctx) {
         ctx.startForegroundService(new Intent(ctx, HubService.class));
@@ -121,6 +122,25 @@ public class HubService extends Service {
             sp.edit().putBoolean("calarNaoFunciona", Estado.calarNaoFunciona)
                      .putBoolean("baixoNaoFunciona", Estado.baixoNaoFunciona).apply();
         boolean c = Estado.conectado();
+        // o 3DS chegou e o som não está liberado (o Android esquece essa permissão quando
+        // o app fecha): avisa com um toque que já abre o pedido
+        if (c && !Estado.somLigado && !avisouSom) {
+            avisouSom = true;
+            PendingIntent pedir = PendingIntent.getActivity(this, 5,
+                    new Intent(this, MainActivity.class).putExtra(MainActivity.PEDIR_SOM, true)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+            getSystemService(NotificationManager.class).notify(NOTIFICACAO_SOM, new Notification.Builder(this, CANAL)
+                    .setSmallIcon(R.drawable.ic_notificacao)
+                    .setContentTitle("Som no 3DS desligado")
+                    .setContentText("Toque para liberar o som e a tela de novo")
+                    .setContentIntent(pedir)
+                    .setAutoCancel(true)
+                    .build());
+        } else if (Estado.somLigado && avisouSom) {
+            avisouSom = false;
+            getSystemService(NotificationManager.class).cancel(NOTIFICACAO_SOM);
+        }
         if (c != ultimoConectado) {
             ultimoConectado = c;
             getSystemService(NotificationManager.class).notify(NOTIFICACAO, notificacao());

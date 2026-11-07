@@ -10,7 +10,7 @@ android {
         applicationId "io.github.chunob.hub3ds"
         minSdk 29          // Android 10: o primeiro que deixa capturar o som de outros apps
         targetSdk 34
-        versionCode 6
+        versionCode 7
         versionName "1.13.2"
     }
 

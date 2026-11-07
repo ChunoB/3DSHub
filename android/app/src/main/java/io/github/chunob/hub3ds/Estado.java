@@ -14,7 +14,8 @@ final class Estado {
     static volatile boolean modoBaixo;          // calado pelo volume mínimo (não pelo mudo)
     static volatile boolean baixoNaoFunciona;   // nem o volume mínimo deixa som para o 3DS: sai nos dois
     static volatile int volume3ds = 80;         // volume do som que vai para o 3DS (0-100) quando calado
-    static volatile boolean somBloqueado;       // o app tocando agora proíbe a captura do som (ex.: Spotify)
+    static volatile boolean somBloqueado;
+    static volatile int nivelSom;               // 0-100: o mais alto que a captura ouviu agora há pouco       // o app tocando agora proíbe a captura do som (ex.: Spotify)
 
     static boolean conectado() {
         return ultimoOi3ds != 0 && android.os.SystemClock.elapsedRealtime() - ultimoOi3ds < 4000;

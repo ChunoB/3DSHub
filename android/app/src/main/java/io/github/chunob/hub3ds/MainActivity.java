@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
     private static final int FUNDO = 0xFF151823, CARTAO = 0xFF20253A, CARTAO2 = 0xFF2A3048, TEXTO = 0xFFE8EAF2, MUDO = 0xFF9AA0B5;
     private static final int AGUA = 0xFF1D9E75, AGUA_CL = 0xFF5DCAA5, AMARELO = 0xFFEF9F27;
     private static final int PEDIR_PERMISSOES = 1, PEDIR_CAPTURA = 2;
+    static final String PEDIR_SOM = "pedir_som";
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView ponto, estado, enderecos, somTexto;
@@ -219,6 +220,12 @@ public class MainActivity extends Activity {
 
         pedirPermissoesBasicas();
         HubService.ligar(this);
+        if (getIntent().getBooleanExtra(PEDIR_SOM, false) && !Estado.somLigado) pedirSom();
+    }
+
+    @Override protected void onNewIntent(Intent i) {
+        super.onNewIntent(i);
+        if (i.getBooleanExtra(PEDIR_SOM, false) && !Estado.somLigado) pedirSom();
     }
 
     @Override protected void onResume() {
@@ -249,6 +256,8 @@ public class MainActivity extends Activity {
             else if (Estado.somBloqueado) s = "O app que está tocando não deixa mandar o som dele (o Spotify faz isso). Ele continua no celular.";
             else if (Estado.calado) s = "Mandando o som para o 3DS. O celular está mudo: o volume agora é o do 3DS.";
             else s = "Mandando o som para o 3DS.";
+            if (Estado.somLigado && Estado.somPedido)
+                s += "\nNível do som capturado: " + Estado.nivelSom + "%" + (Estado.nivelSom == 0 ? " (mudo: o app que toca deixa?)" : "");
             if (Estado.baixoNaoFunciona) s += "\nNeste celular não deu para calar sem calar o 3DS junto, então o som sai nos dois.";
             else if (Estado.modoBaixo) s += "\nNeste celular o mudo calava o 3DS junto: o celular fica no volume mínimo.";
             if (!Estado.erroSom.isEmpty()) s += "\nErro: " + Estado.erroSom;

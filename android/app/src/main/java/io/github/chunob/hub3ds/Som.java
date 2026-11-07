@@ -205,6 +205,7 @@ final class Som {
             int maior = 0;
             for (int i = 0; i < n; i++) maior = Math.max(maior, Math.abs((int) entrada[i]));
             if (maior > 3) ultimoSom = agora;
+            Estado.nivelSom = Math.max(maior * 100 / 32767, Estado.nivelSom * 9 / 10);
             boolean querMudo = querido && Estado.querCalar && !Estado.somBloqueado && !Estado.baixoNaoFunciona;
             if (querMudo && !Estado.calado) { calar(); caladoDesde = agora; }
             else if (!querMudo && Estado.calado) descalar();
