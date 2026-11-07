@@ -8,6 +8,9 @@
 //   A            : Turbo (quando a barra está cheia: pontos em dobro por 10 s)
 //   X            : recomeçar a música     R: pular para a próxima
 //   SELECT       : encerrar a vez         START: voltar ao menu (no menu: sair)
+//   Y            : a música tocando aqui no 3DS (o som do PC ou do celular; com o
+//                  celular já começa ligado). Use fone no 3DS: sem fone, o microfone
+//                  ouve a música também.
 //
 // Na primeira vez que uma música toca, a faixa mostra os trechos com letra e as notas
 // aparecem quando soam (o PC as grava). Da segunda vez em diante, as notas gravadas vêm
@@ -18,6 +21,7 @@
 // música e manda a letra em pedaços. Se a música pausar no PC, tudo para aqui também.
 
 #include "comum.h"
+#include "som.h"
 
 #include <malloc.h>
 #include <math.h>
@@ -572,7 +576,8 @@ static void desenharJogoBaixo(void) {
     desenharFaixa();
     if (!pcAntigo && jg.rodada == 0)
         uiTexto(200, 90, 13, COR_TEXTO, CENTRO, 230, "Sem rodada: START volta ao menu");
-    uiTexto(160, 202, 10, COR_MUDO, CENTRO, 316, "A Turbo   X Recomeçar   R Pular música");
+    uiTexto(160, 202, 10, COR_MUDO, CENTRO, 316, "A Turbo   X Recomeçar   R Pular música   Y Som %s",
+            somLigado() ? "(ligado)" : "(desligado)");
     uiTexto(160, 216, 10, COR_MUDO, CENTRO, 316, "SELECT Encerrar a vez   START Menu");
 }
 
@@ -1037,9 +1042,29 @@ void modKaraoke(void) {
     posSuave = 0;
     ultimoQuadro = osGetTime();
 
+    // som aqui no 3DS: com o NDSP ligado, o HOME e a tampa são tratados aqui (como na
+    // Segunda Tela). Com o celular, a música já começa tocando aqui.
+    aptSetHomeAllowed(false);
+    bool podiaDormir = aptIsSleepAllowed();
+    aptSetSleepAllowed(false);
+    if (alvoCelular()) somIniciar();
+
     while (aptMainLoop()) {
+        if (aptCheckHomePressRejected()) {
+            bool tinhaSom = somLigado();
+            somEncerrar();
+            aptJumpToHomeMenu();
+            if (aptShouldClose()) break;
+            if (tinhaSom) somIniciar();
+            continue;
+        }
         hidScanInput();
         u32 down = hidKeysDown();
+        if (down & KEY_Y) {
+            if (somLigado()) somEncerrar();
+            else somIniciar();
+        }
+        if (somLigado()) somAtualizar();
         touchPosition tp;
         hidTouchRead(&tp);
         u64 agora = osGetTime();
@@ -1206,6 +1231,9 @@ void modKaraoke(void) {
     }
 
     if (!pcAntigo && ultimaResposta) pedir('X', NULL, 0);
+    somEncerrar();
+    aptSetHomeAllowed(true);
+    aptSetSleepAllowed(podiaDormir);
     MICU_StopSampling();
     micExit();
     free(micBuf);
