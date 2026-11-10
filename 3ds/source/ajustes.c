@@ -21,7 +21,7 @@
 #define ARQ_CRC_CIA "sdmc:/3ds/3dshub_cia.crc"   // versão do CIA instalado pela atualização
 #define ARQ_LIGAR   "sdmc:/3ds/3dshub_ligar.txt" // PCs que o 3DS sabe ligar: nome|broadcast|macs
 
-enum { PROCURAR, DIGITAR_IP, ATUALIZAR, ATUALIZAR_NET, REMOTO, LIGAR, SUSPENDER, NUMERO, SIM_NAO };
+enum { PROCURAR, DIGITAR_IP, ATUALIZAR, ATUALIZAR_NET, REMOTO, LIGAR, SUSPENDER, SONS, NUMERO, SIM_NAO };
 
 typedef struct {
     int tipo;
@@ -44,6 +44,8 @@ static const Linha linhas[] = {
       "Baixa do GitHub a versão mais nova do 3DS Hub\n(precisa de internet no Wi-Fi do 3DS).", 0, 0, 0 },
     { ATUALIZAR,  "Atualizar pelo PC", NULL, NULL,
       "Baixa do PC a versão do 3DS Hub que está na\npasta do Hub, sem tirar o cartão SD.", 0, 0, 0 },
+    { SONS,       "Sons do menu", NULL, NULL,
+      "O tique ao passar pelos ícones e os sons de\nabrir e voltar, no menu e nestes Ajustes.\nPrecisa do sdmc:/3ds/dspfirm.cdc.", 0, 0, 0 },
     { NUMERO,     "Giroscópio: velocidade", "giro_pixels_por_grau", "px/°",
       "Quanto a mira anda (no mouse) para cada grau\nque você gira o console. Maior = mais rápido.", 1, 1, 80 },
     { NUMERO,     "Giroscópio: analógico", "giro_analogico_graus", "°/s",
@@ -365,9 +367,14 @@ bool escolherAparelho(void) {
         u32 down = hidKeysDown();
         touchPosition tp;
         hidTouchRead(&tp);
-        if (down & (KEY_B | KEY_START)) break;
+        if (down & (KEY_B | KEY_START)) {
+            uiSomTocar(SOM_VOLTAR);
+            break;
+        }
+        int selAntes = sel;
         if ((down & KEY_DUP) && sel > 0) sel--;
         if ((down & KEY_DDOWN) && sel < total - 1) sel++;
+        if (sel != selAntes) uiSomTocar(SOM_MOVER);
         if (sel < topo) topo = sel;
         if (sel >= topo + LINHAS_VISIVEIS) topo = sel - LINHAS_VISIVEIS + 1;
         int escolha = -1;
@@ -375,6 +382,7 @@ bool escolherAparelho(void) {
         if (down & KEY_TOUCH)
             for (int i = topo; i < total && i < topo + LINHAS_VISIVEIS; i++)
                 if (uiDentro(&tp, 10, 40 + (i - topo) * 34, 300, 30)) escolha = i;
+        if (escolha >= 0) uiSomTocar(SOM_ABRIR);
         if (escolha >= 0 && escolha < n) {               // nesta rede: conexão direta
             definirIP(ips[escolha]);
             snprintf(nomePC, sizeof(nomePC), "%s", nomes[escolha]);
@@ -638,6 +646,7 @@ static void parearLonge(void) {
     swkbdSetHintText(&kb, "Senha do PC (ou código)");
     swkbdSetPasswordMode(&kb, SWKBD_PASSWORD_HIDE_DELAY);
     swkbdSetValidation(&kb, SWKBD_NOTEMPTY_NOTBLANK, 0, 0);
+    uiSomPausar();                 // (como em pedirIP: não entra no teclado com o NDSP ligado)
     if (swkbdInputText(&kb, senha, sizeof(senha)) != SWKBD_BUTTON_CONFIRM) return;
 
     desenharMensagem("Pareando...", "Conferindo a senha", -1, NULL);
@@ -768,6 +777,7 @@ static void textoValor(int i, char *s, size_t n) {
         snprintf(s, n, "%s", nLigar > 0 ? pcsLigar[escolhaLigar].nome : "Nenhum PC");
     }
     else if (l->tipo == SUSPENDER)  snprintf(s, n, "%s", sock >= 0 ? (nomePC[0] ? nomePC : "PC") : "-");
+    else if (l->tipo == SONS)       snprintf(s, n, "%s", !uiSomQuer() ? "Não" : uiSomFunciona() ? "Sim" : "Sem dspfirm");
     else if (l->tipo == REMOTO) {
         if (!tunelQuantos()) snprintf(s, n, "Nenhum PC");
         else snprintf(s, n, "%d PC%s%s", tunelQuantos(), tunelQuantos() > 1 ? "s" : "", modoRemoto ? " (em uso)" : "");
@@ -851,9 +861,12 @@ void modAjustes(void) {
         u32 down = hidKeysDown();
         touchPosition tp;
         hidTouchRead(&tp);
-        if (down & (KEY_START | KEY_B)) break;
+        if (down & (KEY_START | KEY_B)) {
+            uiSomTocar(SOM_VOLTAR);
+            break;
+        }
 
-        int acao = -1, direcao = 0;
+        int acao = -1, direcao = 0, selAntes = sel;
         u32 rep = hidKeysDownRepeat();
         if ((rep & KEY_UP) && sel > 0) sel--;
         if ((rep & KEY_DOWN) && sel < N_LINHAS - 1) sel++;
@@ -874,11 +887,19 @@ void modAjustes(void) {
         if (sel < inicio) inicio = sel;
         if (sel >= inicio + VISIVEIS) inicio = sel - VISIVEIS + 1;
 
-        if (direcao && precisaDoPC(sel)) mudar(sel, direcao);
-        if (direcao && linhas[sel].tipo == LIGAR && nLigar > 1)
+        if (sel != selAntes && acao < 0) uiSomTocar(SOM_MOVER);
+        if (direcao && precisaDoPC(sel) && temValores) {
+            uiSomTocar(SOM_TIQUE);
+            mudar(sel, direcao);
+        }
+        if (direcao && linhas[sel].tipo == LIGAR && nLigar > 1) {
+            uiSomTocar(SOM_TIQUE);
             escolhaLigar = (escolhaLigar + direcao + nLigar) % nLigar;
+        }
+        if (direcao && linhas[sel].tipo == SONS) acao = sel;      // os lados também trocam
         if (acao >= 0) {
             sel = acao;
+            if (linhas[acao].tipo != SONS) uiSomTocar(precisaDoPC(acao) && !temValores ? SOM_ERRO : SOM_ABRIR);
             switch (linhas[acao].tipo) {
             case PROCURAR:
                 if (escolherAparelho()) conectar();
@@ -903,6 +924,10 @@ void modAjustes(void) {
                 break;
             case SIM_NAO:
                 mudar(acao, 1);
+                break;
+            case SONS:
+                uiSomDefinir(!uiSomQuer());
+                uiSomTocar(SOM_ABRIR);                    // ligou: já dá para ouvir
                 break;
             default:
                 break;

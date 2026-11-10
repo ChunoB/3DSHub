@@ -135,6 +135,19 @@ void uiAviso(const char *titulo, const char *texto, int icone, u32 cor);
 bool uiConfirmar(const char *modulo, int icone, u32 cor, const char *titulo, const char *texto,
                  const char *sim, const char *nao, void (*aCadaQuadro)(void));
 
+// ---------------------------------------------------------------- sons da interface (uisom.c)
+// O tique ao andar pelos ícones, abrir, voltar e erro. Só tocam onde foram permitidos
+// (menu e Ajustes); nos outros módulos uiSomTocar não faz nada.
+enum { SOM_MOVER, SOM_TIQUE, SOM_ABRIR, SOM_VOLTAR, SOM_ERRO, N_SONS };
+void uiSomPermitir(bool sim);   // false antes de abrir um módulo (desliga o NDSP de vez)
+void uiSomTocar(int som);
+void uiSomPausar(void);         // antes do teclado do sistema: desliga; o próximo som religa
+void uiSomQuadro(void);         // a cada quadro (o uiQuadro já chama): HOME e descanso
+void uiSomFim(void);            // ao fechar o app
+bool uiSomQuer(void);           // a opção dos Ajustes
+void uiSomDefinir(bool ligado);
+bool uiSomFunciona(void);       // false = o NDSP não ligou (falta o dspfirm.cdc)
+
 // ---------------------------------------------------------------- imagens
 // Imagem RGB565 que pode mudar a cada quadro (prévia da câmera, espelho).
 // Escreva os pixels em 'pixels' (linha 0 = topo, largura de linha = UI_IMG_LARG)

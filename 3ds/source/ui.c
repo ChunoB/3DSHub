@@ -48,6 +48,7 @@ void uiIniciar(void) {
 }
 
 void uiEncerrar(void) {
+    uiSomFim();
     ptmuExit();
     if (mcuOk) mcuHwcExit();
     C2D_TextBufDelete(bufTexto);
@@ -67,6 +68,7 @@ static void atualizarStatus(void) {
 }
 
 void uiQuadro(void) {
+    uiSomQuadro();
     if (quadro++ % 60 == 0) atualizarStatus();
     C2D_TextBufClear(bufTexto);
     C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
@@ -569,8 +571,10 @@ void uiAviso(const char *titulo, const char *texto, int icone, u32 cor) {
         u32 down = hidKeysDown();
         touchPosition tp;
         hidTouchRead(&tp);
-        if (down & (KEY_START | KEY_A | KEY_B)) break;
-        if ((down & KEY_TOUCH) && uiDentro(&tp, 60, 92, 200, 56)) break;
+        if ((down & (KEY_START | KEY_A | KEY_B)) || ((down & KEY_TOUCH) && uiDentro(&tp, 60, 92, 200, 56))) {
+            uiSomTocar(SOM_TIQUE);
+            break;
+        }
 
         uiQuadro();
         uiTela(alvoCima);
@@ -596,11 +600,14 @@ bool uiConfirmar(const char *modulo, int icone, u32 cor, const char *titulo, con
         u32 down = hidKeysDown();
         touchPosition tp;
         hidTouchRead(&tp);
-        if (down & KEY_A) return true;
-        if (down & (KEY_B | KEY_START)) return false;
+        bool sim_ = down & KEY_A, nao_ = down & (KEY_B | KEY_START);
         if (down & KEY_TOUCH) {
-            if (uiDentro(&tp, 10, 92, 145, 56)) return true;
-            if (uiDentro(&tp, 165, 92, 145, 56)) return false;
+            if (uiDentro(&tp, 10, 92, 145, 56)) sim_ = true;
+            if (uiDentro(&tp, 165, 92, 145, 56)) nao_ = true;
+        }
+        if (sim_ || nao_) {
+            uiSomTocar(sim_ ? SOM_ABRIR : SOM_VOLTAR);
+            return sim_;
         }
         if (aCadaQuadro) aCadaQuadro();
 

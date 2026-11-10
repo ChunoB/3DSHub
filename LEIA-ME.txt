@@ -167,6 +167,13 @@ O QUE MUDOU NESTA VERSAO (1.14.0)
   modulo escolhido cresce, a cor dele toma a tela ao abrir e some ao voltar),
   cartoes com contorno, dicas de botao desenhadas (A, B, START...) no lugar
   do texto miudo e barras de rolagem nas listas.
+- Sons no menu e nos Ajustes: um "tac" ao passar pelos icones e sons de
+  abrir, voltar e erro. Precisa do sdmc:/3ds/dspfirm.cdc (o mesmo do
+  Sintetizador). Para desligar: Ajustes > Sons do menu.
+  Para usar os seus proprios sons (por exemplo, os do sistema, tirados do
+  seu console), coloque arquivos .wav (PCM 16 bits, ate 2 s) na pasta
+  sdmc:/3ds/3dshub_sons com os nomes mover.wav, tique.wav, abrir.wav,
+  voltar.wav e erro.wav. Os que faltarem usam o som do app.
 - Menu: circle pad e segurar a cruz andam sozinhos, L/R = anterior/proximo,
   o toque abre ao soltar (arrastar para fora desiste) e o menu abre no
   ultimo modulo usado.

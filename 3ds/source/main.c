@@ -447,6 +447,7 @@ int main(int argc, char **argv) {
     }
     hidSetRepeatParameters(22, 7);      // segurar a cruz ou o circle pad anda sozinho
     int sel = lerUltimoModulo();
+    uiSomPermitir(true);
     int apertado = -1;                  // tile com o dedo em cima (abre ao soltar)
     touchPosition toque = { 0 };
     u32 quadro = 0;
@@ -456,7 +457,7 @@ int main(int argc, char **argv) {
     while (aptMainLoop() && !sairDoApp) {
         hidScanInput();
         u32 down = hidKeysDown();
-        int abrir = -1;
+        int abrir = -1, selAntes = sel;
 
         if (esperarSoltarStart) {
             if (hidKeysHeld() & KEY_START) down &= ~KEY_START;
@@ -468,8 +469,10 @@ int main(int argc, char **argv) {
             apertouStart = false;
             if (osGetTime() < confirmarSaidaAte) break;
             confirmarSaidaAte = osGetTime() + 2500;
+            uiSomTocar(SOM_VOLTAR);
         }
         if ((down & KEY_SELECT) && rede) {
+            uiSomTocar(SOM_ABRIR);
             escolherAparelho();
             if (aptShouldClose()) break;
             fecharSondaDeVez();
@@ -503,6 +506,7 @@ int main(int argc, char **argv) {
             apertado = -1;
         }
         if (abrir >= 0) sel = abrir;
+        else if (sel != selAntes) uiSomTocar(SOM_MOVER);
 
         // versão nova na internet: procura sozinho alguns segundos depois de abrir
         // e pergunta uma vez se quer atualizar
@@ -527,16 +531,23 @@ int main(int argc, char **argv) {
         if (abrir >= 0) {
             const Item *it = &itens[abrir];
             if (alvoCelular() && !it->noCelular) {
+                uiSomTocar(SOM_ERRO);
                 uiAviso(it->nome, "Este módulo só funciona com o PC.", it->icone, it->cor);
             } else if (it->precisaPC && !rede) {
+                uiSomTocar(SOM_ERRO);
                 uiAviso("Rede do 3DS", "Não consegui iniciar a rede do 3DS.\nReinicie o app.", IC_X, COR_VERMELHO);
             } else if (it->precisaPC && !modoRemoto && !ipPC[0] && !pedirIP()) {
                 // ainda sem PC e cancelou o IP: continua no menu (a descoberta segue tentando)
             } else {
                 gravarUltimoModulo(abrir);
+                uiSomTocar(SOM_ABRIR);
                 transicaoAbrir(abrir, temIP);
                 fecharSonda();
+                // os módulos cuidam do próprio som (NDSP): o da interface sai de cena.
+                // Só os Ajustes continuam com ele.
+                if (abrir != ITEM_AJUSTES) uiSomPermitir(false);
                 it->abrir();
+                uiSomPermitir(true);
                 if (aptShouldClose()) break;   // fechado pelo HOME dentro do módulo: sai já
                 apertouStart = false;       // o START dentro do módulo era para sair dele
                 esperarSoltarStart = true;

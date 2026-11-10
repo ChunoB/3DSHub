@@ -71,6 +71,7 @@ bool pedirIP(void) {
     swkbdSetNumpadKeys(&kb, '.', 0);
     swkbdSetHintText(&kb, "IP do PC (ex: 192.168.0.10)");
     swkbdSetInitialText(&kb, ipPC);
+    uiSomPausar();                 // o teclado é outro programa: não entra nele com o NDSP ligado
     if (swkbdInputText(&kb, novo, sizeof(novo)) != SWKBD_BUTTON_CONFIRM) return false;
     if (!definirIP(novo)) return false;
     nomePC[0] = 0;                 // IP digitado: ainda não sabemos o nome desse PC
