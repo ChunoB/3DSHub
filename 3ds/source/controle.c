@@ -165,7 +165,7 @@ static void cruz(float cx, float cy, u32 k) {
 
 static void desenharControle(const Estado *e) {
     u32 k = e->keys;
-    uiRetArred(16, 62, 368, 144, 12, COR_CARTAO);
+    uiCartao(16, 62, 368, 144, 12);
 
     // ombros e gatilhos (ZL/ZR só existem no New 3DS; no perfil com toque = gatilhos,
     // LT/RT vêm da tela de baixo)
@@ -220,7 +220,7 @@ static void desenharControle(const Estado *e) {
 
 static void desenharLegenda(const Estado *e) {
     // o que cada botão faz (acende quando apertado)
-    uiRetArred(16, 62, 368, 144, 12, COR_CARTAO);
+    uiCartao(16, 62, 368, 144, 12);
     u32 k = e->keys;
     bool temLegenda = e->conectado && ultimaLegenda && osGetTime() - ultimaLegenda < 5000;
     #define ACAO(b) (temLegenda ? legenda[b] : "")
@@ -257,7 +257,7 @@ static void desenharCima(const Estado *e) {
 
     // conexão, perfil e modo numa faixa só
     bool modoTeclado = e->teclado || !strcmp(e->modo, "teclado");
-    uiRetArred(16, 28, 368, 28, 10, COR_CARTAO);
+    uiCartao(16, 28, 368, 28, 10);
     uiCirculo(30, 42, 5, e->conectado ? COR_AGUA_CL : COR_AMARELO);
     uiTexto(42, 34, 13, e->conectado ? COR_TEXTO : COR_AMARELO, ESQ, 120, "%s",
             e->conectado ? "Conectado" : "Procurando o PC...");
@@ -276,9 +276,11 @@ static void desenharCima(const Estado *e) {
         uiTexto(40, 214, 13, COR_AMARELO, ESQ, 0, "Giroscópio: calibrando, deixe parado");
     else if (e->giro)
         uiTexto(40, 214, 13, COR_AGUA_CL, ESQ, 0, "Giroscópio ligado  (%.0f°/s, %.0f°/s)", e->guinada, e->rolagem);
-    else
-        uiTexto(40, 214, 13, COR_MUDO, ESQ, 0, "Giroscópio desligado  (SELECT+B)");
-    uiTexto(384, 214, 13, COR_MUDO, DIR, 0, "SELECT+Y: %s", vistaLegenda ? "controle" : "legenda");
+    else {
+        float w = uiTexto(40, 214, 13, COR_MUDO, ESQ, 0, "Giroscópio desligado");
+        uiDica(40 + w + 8, 214, "SELECT+B", NULL);
+    }
+    uiDicas(384, 214, DIR, "SELECT+Y", vistaLegenda ? "controle" : "legenda", NULL);
 }
 
 static void desenharBaixo(const Estado *e) {
@@ -295,7 +297,8 @@ static void desenharBaixo(const Estado *e) {
             uiCirculo(e->tx, e->ty, 10, COR_ROXO);
         }
         uiTexto(8, 4, 12, COR_ROXO_CL, ESQ, 0, "Câmera (analógico direito)");
-        uiTexto(312, 222, 12, COR_MUDO, DIR, 0, "SELECT+X: mouse");
+        // (antes esta tela não dizia como sair, e chamava de "mouse" o que pode ser botões)
+        uiDicas(8, 222, ESQ, "SELECT+X", "voltar ao toque", "START+SELECT", "menu", NULL);
         return;
     }
 
@@ -307,7 +310,7 @@ static void desenharBaixo(const Estado *e) {
         };
         for (int i = 0; i < 4; i++) {
             bool aceso = e->zona == bts[i].z;
-            uiRetArred(bts[i].x, bts[i].y, BT_W, BT_H, 12, aceso ? COR_ROXO : COR_CARTAO);
+            uiCartaoSel(bts[i].x, bts[i].y, BT_W, BT_H, 12, aceso, COR_ROXO);
             uiTexto(bts[i].x + BT_W / 2, bts[i].y + BT_H / 2 - 14, 24, aceso ? COR_BRANCO : COR_TEXTO,
                     CENTRO, 0, "%s", bts[i].nome);
         }
@@ -324,27 +327,27 @@ static void desenharBaixo(const Estado *e) {
         } else {
             uiTexto(ST_X, ST_Y + ST_R - 26, 11, COR_MUDO, CENTRO, 0, "analógico direito");
         }
-        uiTexto(8, 206, 11, COR_MUDO, ESQ, 0, "Perfil do PC: toque = botões + analógico");
-        uiTexto(8, 222, 11, COR_MUDO, ESQ, 0, "SELECT+X: tela toda analógico   START+SELECT: menu");
+        uiTexto(8, 205, 11, COR_MUDO, ESQ, 0, "Perfil do PC: toque = botões + analógico");
+        uiDicas(8, 222, ESQ, "SELECT+X", "tela toda analógico", "START+SELECT", "menu", NULL);
         return;
     }
 
     if (modoToque(e) == TOQUE_GATILHOS) {
         // perfil com toque = gatilhos (ex.: Genshin): dois botões grandes, LT e RT
         bool lt = e->zona == Z_LT, rt = e->zona == Z_RT;
-        uiRetArred(8, 8, 148, 192, 14, lt ? COR_ROXO : COR_CARTAO);
-        uiRetArred(164, 8, 148, 192, 14, rt ? COR_ROXO : COR_CARTAO);
+        uiCartaoSel(8, 8, 148, 192, 14, lt, COR_ROXO);
+        uiCartaoSel(164, 8, 148, 192, 14, rt, COR_ROXO);
         uiTexto(82, 76, 40, lt ? COR_BRANCO : COR_TEXTO, CENTRO, 0, "LT");
         uiTexto(238, 76, 40, rt ? COR_BRANCO : COR_TEXTO, CENTRO, 0, "RT");
         uiTexto(82, 124, 12, lt ? COR_BRANCO : COR_MUDO, CENTRO, 0, "gatilho esquerdo");
         uiTexto(238, 124, 12, rt ? COR_BRANCO : COR_MUDO, CENTRO, 0, "gatilho direito");
-        uiTexto(8, 206, 11, COR_MUDO, ESQ, 0, "Perfil do PC: toque = LT / RT   SELECT+X câmera");
-        uiTexto(8, 222, 11, COR_MUDO, ESQ, 0, "START+SELECT: voltar ao menu");
+        uiTexto(8, 205, 11, COR_MUDO, ESQ, 0, "Perfil do PC: toque = LT / RT");
+        uiDicas(8, 222, ESQ, "SELECT+X", "câmera", "START+SELECT", "menu", NULL);
         return;
     }
 
     // touchpad + faixa de rolagem à direita
-    uiRetArred(8, 8, FAIXA_ROLAGEM - 14, 192, 12, COR_CARTAO);
+    uiCartao(8, 8, FAIXA_ROLAGEM - 14, 192, 12);
     for (int x = 40; x < FAIXA_ROLAGEM - 10; x += 32)           // pontinhos de fundo
         for (int y = 36; y < 196; y += 32)
             uiCirculo(x, y, 1.2f, COR_LINHA);
@@ -362,8 +365,8 @@ static void desenharBaixo(const Estado *e) {
 
     if (e->tocando) uiCirculo(e->tx, e->ty, 16, COR_TOQUE);
 
-    uiTexto(8, 206, 11, COR_MUDO, ESQ, 0, "SELECT+A teclado  SELECT+X câmera  SELECT+Y tela");
-    uiTexto(8, 222, 11, COR_MUDO, ESQ, 0, "START+SELECT: voltar ao menu");
+    uiDicas(8, 205, ESQ, "SELECT+A", "teclado", "SELECT+X", "câmera", NULL);
+    uiDicas(8, 222, ESQ, "SELECT+Y", "tela de cima", "START+SELECT", "menu", NULL);
 }
 
 // ---------------------------------------------------------------- módulo
@@ -371,14 +374,14 @@ static void desenharBaixo(const Estado *e) {
 void modControle(void) {
     struct sockaddr_in dest;
     int sock = abrirUDP(PORTA, &dest);
-    if (sock < 0) return;
+    if (sock < 0) {
+        avisoSemConexao("Controle", IC_CONTROLE, COR_ROXO);
+        return;
+    }
 
     irrstInit();                 // ZL/ZR e C-stick do New 3DS (no Old falha sem problema)
     HIDUSER_EnableGyroscope();
-    // coeficiente = leituras brutas por grau/s (~14,375): graus/s = bruto / coef.
-    // (Antes multiplicava, e o giroscópio saía ~200x sensível demais.)
-    float coef = 14.375f;
-    if (R_FAILED(HIDUSER_GetGyroscopeRawToDpsCoefficient(&coef)) || coef < 1.0f) coef = 14.375f;
+    float coef = giroCoeficiente();     // graus/s = bruto / coef
 
     Estado e;
     memset(&e, 0, sizeof(e));
@@ -476,8 +479,7 @@ void modControle(void) {
         }
         enviarPara(sock, &p, sizeof(p), &dest);
 
-        // resposta do PC: "3DSA" + perfil + "\n" + modo
-        // respostas do PC: "3DSA" (perfil e modo) e "3DSM" (o que cada botão faz)
+        // respostas do PC: "3DSA" (perfil + "\n" + modo) e "3DSM" (o que cada botão faz)
         static char resp[1024];
         int n;
         while ((n = receberDe(sock, resp, sizeof(resp) - 1)) >= 4) {
@@ -514,13 +516,7 @@ void modControle(void) {
         uiFim();
     }
 
-    // avisa o PC que tudo foi solto
-    memset(&p, 0, sizeof(p));
-    memcpy(p.magic, "3DS2", 4);
-    for (int i = 0; i < 5; i++) {
-        p.seq = seq++;
-        enviarPara(sock, &p, sizeof(p), &dest);
-    }
+    controleSoltarTudo(sock, &dest, &seq);
     fecharRede(sock);
     HIDUSER_DisableGyroscope();
     irrstExit();

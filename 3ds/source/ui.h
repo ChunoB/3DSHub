@@ -16,6 +16,7 @@
 #define COR_CARTAO     HEX(0x20253A)
 #define COR_CARTAO2    HEX(0x2A3048)
 #define COR_LINHA      HEX(0x343B57)
+#define COR_BORDA      HEX(0x2C3250)   // contorno fino dos cartões
 #define COR_TEXTO      HEX(0xE8EAF2)
 #define COR_TEXTO2     HEX(0xB8BDD0)
 #define COR_MUDO       HEX(0x9AA0B5)
@@ -53,6 +54,14 @@ void uiEncerrar(void);
 void uiQuadro(void);                 // começa um quadro (limpa o texto do quadro anterior)
 void uiTela(C3D_RenderTarget *alvo); // passa a desenhar nesta tela (já limpa com o fundo)
 void uiFim(void);                    // termina e mostra o quadro (espera o vblank)
+// Igual ao uiTela, mas com o fundo em degradê (corCima no alto, corBaixo embaixo).
+void uiTelaGrad(C3D_RenderTarget *alvo, u32 corCima, u32 corBaixo);
+
+// ---------------------------------------------------------------- cor e movimento
+u32   uiMistura(u32 a, u32 b, float t);              // t = 0 dá a, t = 1 dá b
+u32   uiAlfa(u32 cor, float alfa);                   // a mesma cor, transparente (0 a 1)
+// Chega perto do alvo um pouco a cada quadro (rápido no começo, suave no fim).
+float uiSuave(float atual, float alvo, float taxa);
 
 // ---------------------------------------------------------------- formas
 void uiRet(float x, float y, float w, float h, u32 cor);
@@ -63,6 +72,13 @@ void uiLinha(float x0, float y0, float x1, float y1, float espessura, u32 cor);
 void uiTri(float x0, float y0, float x1, float y1, float x2, float y2, u32 cor);
 void uiQuad(float cx, float cy, float w, float h, float angulo, u32 cor);   // retângulo girado
 void uiBarra(float x, float y, float w, float h, float fracao, u32 cor, u32 corFundo);
+void uiRetGrad(float x, float y, float w, float h, u32 corCima, u32 corBaixo);
+// Cartão padrão: COR_CARTAO com um contorno fino (destaca do fundo sem pesar).
+void uiCartao(float x, float y, float w, float h, float raio);
+// Item de lista ou aba: escolhido = cor cheia; senão, o cartão padrão.
+void uiCartaoSel(float x, float y, float w, float h, float raio, bool escolhido, u32 corEscolhido);
+// Cartão de outra cor, com o contorno dado.
+void uiCartaoCor(float x, float y, float w, float h, float raio, u32 cor, u32 corBorda);
 
 // ---------------------------------------------------------------- texto
 enum { ESQ, CENTRO, DIR };
@@ -72,6 +88,8 @@ float uiTexto(float x, float y, float tamanho, u32 cor, int alinhamento, float l
               const char *fmt, ...) __attribute__((format(printf, 7, 8)));
 // Largura que o texto teria nesse tamanho (só mede, não desenha).
 float uiLarguraTexto(const char *s, float tamanho);
+// O mesmo, para um texto que vai ser desenhado com larguraMax (cortado com "...").
+float uiLarguraTextoMax(const char *s, float tamanho, float larguraMax);
 
 // ---------------------------------------------------------------- ícones
 enum {
@@ -96,8 +114,26 @@ void uiBotao(float x, float y, float w, float h, const char *rotulo, int icone,
 
 bool uiDentro(const touchPosition *tp, float x, float y, float w, float h);
 
-// Tela de aviso (erro de rede etc.): fica até apertar START ou A.
+// Dica de botão: o desenho do botão ("A", "START", "L/R"...) e o que ele faz.
+// y = topo da linha (altura UI_DICA). Retorna a largura desenhada.
+#define UI_DICA 14
+float uiDica(float x, float y, const char *botao, const char *texto);
+float uiLarguraDica(const char *botao, const char *texto);
+// Várias dicas numa linha só: pares (botão, texto) terminados por NULL.
+// ESQ começa em x, CENTRO centra em x, DIR termina em x.
+void uiDicas(float x, float y, int alinhamento, ...) __attribute__((sentinel));
+
+// Barra de rolagem fina de uma lista (total de itens, quantos cabem, o primeiro visível).
+void uiRolagem(float x, float y, float h, int total, int visiveis, int primeiro, u32 cor);
+
+// Tela de aviso (erro de rede etc.): fica até apertar A, B ou START (ou tocar em OK).
 void uiAviso(const char *titulo, const char *texto, int icone, u32 cor);
+
+// Pergunta com dois botões grandes: A ou o da esquerda = sim; B, START ou o da direita = não.
+// modulo/icone/cor = a barra de status de quem pergunta. aCadaQuadro (ou NULL) roda a cada
+// quadro, para o módulo continuar conversando com o PC enquanto espera a resposta.
+bool uiConfirmar(const char *modulo, int icone, u32 cor, const char *titulo, const char *texto,
+                 const char *sim, const char *nao, void (*aCadaQuadro)(void));
 
 // ---------------------------------------------------------------- imagens
 // Imagem RGB565 que pode mudar a cada quadro (prévia da câmera, espelho).

@@ -10,9 +10,10 @@
 //   START            : voltar ao menu
 //
 // O som sai pelo NDSP, que precisa do arquivo sdmc:/3ds/dspfirm.cdc
-// (gerado uma vez pelo homebrew DSP1).
+// (gerado uma vez pelo menu Rosalina; o aviso do app explica como).
 
 #include "comum.h"
+#include "som.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -214,7 +215,7 @@ static void desenharTheremin(bool tocando, int tx, int ty, int oitava) {
         uiLinha(0, ty, 320, ty, 2, COR_ROSA);
         uiCirculo(tx, ty, 9, COR_ROSA_CL);
     }
-    uiTexto(316, 222, 11, COR_MUDO, DIR, 0, "lados: nota   cima: volume");
+    uiDicas(316, 222, DIR, "lados", "nota", "cima", "volume", NULL);
 }
 
 // ---------------------------------------------------------------- tela de cima
@@ -250,7 +251,7 @@ static void desenharCima(bool theremin, int oitava, bool inclinacao, bool eco,
     uiBarraStatus("Sintetizador", IC_PIANO, COR_ROSA_CL);
 
     // nota atual, grande
-    uiRetArred(16, 30, 150, 110, 12, COR_CARTAO);
+    uiCartao(16, 30, 150, 110, 12);
     uiTexto(28, 38, 12, COR_MUDO, ESQ, 0, "Nota");
     if (tocando) {
         int m = (int)roundf(midi);
@@ -261,22 +262,22 @@ static void desenharCima(bool theremin, int oitava, bool inclinacao, bool eco,
     }
 
     // forma de onda
-    uiRetArred(176, 30, 208, 52, 12, COR_CARTAO);
+    uiCartao(176, 30, 208, 52, 12);
     uiTexto(188, 36, 12, COR_MUDO, ESQ, 0, "Onda (Y)");
     uiTexto(188, 54, 16, COR_TEXTO, ESQ, 90, "%s", nomesOndaBonitos[P.onda]);
     desenharOnda(P.onda, 284, 40, 90, 32, COR_ROSA_CL);
 
     // modo e oitava
-    uiRetArred(176, 88, 100, 52, 12, COR_CARTAO);
+    uiCartao(176, 88, 100, 52, 12);
     uiTexto(188, 94, 12, COR_MUDO, ESQ, 0, "Modo (X)");
     uiTexto(188, 112, 16, COR_TEXTO, ESQ, 84, "%s", theremin ? "Theremin" : "Teclado");
-    uiRetArred(284, 88, 100, 52, 12, COR_CARTAO);
+    uiCartao(284, 88, 100, 52, 12);
     uiTexto(296, 94, 12, COR_MUDO, ESQ, 0, "Oitava");
     uiTexto(296, 112, 16, COR_TEXTO, ESQ, 0, "%d", oitava);
     uiTexto(372, 114, 11, COR_MUDO, DIR, 0, "cima/baixo");
 
     // eco, inclinação e os medidores da inclinação
-    uiRetArred(16, 146, 368, 58, 12, COR_CARTAO);
+    uiCartao(16, 146, 368, 58, 12);
     pilula(28, 163, 70, "Eco (R)", eco);
     pilula(106, 163, 108, "Inclinação (L)", inclinacao);
     if (inclinacao) {
@@ -291,7 +292,7 @@ static void desenharCima(bool theremin, int oitava, bool inclinacao, bool eco,
         uiTexto(298, 168, 12, COR_MUDO, CENTRO, 0, "Ligue para entortar a nota");
     }
 
-    uiTexto(16, 214, 13, COR_MUDO, ESQ, 0, "START: voltar ao menu");
+    uiDicas(16, 216, ESQ, "X", "modo", "Y", "onda", "L", "inclinação", "R", "eco", "START", "menu", NULL);
 }
 
 // ---------------------------------------------------------------- módulo
@@ -304,11 +305,7 @@ void modSintetizador(void) {
 
     Thread t = NULL;
     if (!iniciarAudio(&t)) {
-        uiAviso("Sem som",
-                "Falta o arquivo sdmc:/3ds/dspfirm.cdc.\n\n"
-                "Para criar: abra o menu Rosalina\n"
-                "(L + baixo + SELECT) > Miscellaneous options\n"
-                "> Dump DSP firmware. Depois abra de novo.", IC_MUDO, COR_ROSA);
+        somAvisoSemDsp(COR_ROSA);
         return;
     }
 

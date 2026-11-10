@@ -186,7 +186,7 @@ static void desenharBiblioteca(int sel) {
     for (int i = inicioLista; i < nJogos && i < inicioLista + LINHAS; i++) {
         bool s = i == sel;
         float y = linhaY(i);
-        uiRetArred(6, y, 308, LIN_H, 8, s ? COR_STEAM : COR_CARTAO);
+        uiCartaoSel(6, y, 308, LIN_H, 8, s, COR_STEAM);
         int slot = i % N_SLOTS;
         if (donoSlot[slot] == i) uiImagemDesenharParte(&atlas, slotX(slot), slotY(slot), MINI_W, MINI_H, 10, y + 3, 1);
         else                     uiRet(10, y + 3, MINI_W, MINI_H, COR_CARTAO2);
@@ -195,20 +195,10 @@ static void desenharBiblioteca(int sel) {
         textoTempo(tempo, sizeof(tempo), jogos[i].minutos);
         uiTexto(82, y + 19, 10, s ? COR_TEXTO : COR_MUDO, ESQ, 226, "%s", tempo);
     }
-    if (nJogos) uiTexto(314, 212, 11, COR_MUDO, DIR, 0, "%d/%d", sel + 1, nJogos);
-    uiTexto(6, 212, 11, COR_MUDO, ESQ, 0, "A: jogar   X: atualizar   B: menu");
-    uiTexto(6, 226, 10, COR_MUDO, ESQ, 0, "No jogo: START+SELECT volta para cá");
-}
-
-static void desenharConectando(void) {
-    uiQuadro();
-    uiTela(alvoCima);
-    uiBarraStatus("Steam", IC_PLAY, COR_STEAM_CL);
-    uiTexto(200, 96, 20, COR_TEXTO, CENTRO, 0, "Conectando ao PC...");
-    uiTexto(200, 128, 13, COR_MUDO, CENTRO, 0, "%s", modoRemoto ? "pela internet" : ipPC);
-    uiTela(alvoBaixo);
-    uiTexto(160, 108, 14, COR_MUDO, CENTRO, 0, "B ou START: cancelar");
-    uiFim();
+    uiRolagem(315, LIN_Y0, LINHAS * LIN_PASSO - 4, nJogos, LINHAS, inicioLista, COR_STEAM_CL);
+    if (nJogos) uiTexto(314, 207, 11, COR_MUDO, DIR, 0, "%d/%d", sel + 1, nJogos);
+    uiDicas(6, 206, ESQ, "A", "jogar", "X", "atualizar", "B", "menu", NULL);
+    uiDicas(6, 223, ESQ, "L/R", "página", "START+SELECT", "sai do jogo", NULL);
 }
 
 // ---------------------------------------------------------------- jogando: controle
@@ -327,7 +317,7 @@ static void desenharJogo(int i, bool temImagem, bool imagemRapida, float fps, u6
 
     if (ctl.toqueMouse) {
         // touchpad + faixa de rolagem à direita (igual ao Controle: x >= 280 rola)
-        uiRetArred(6, AREA_Y0, 268, AREA_Y1 - AREA_Y0, 12, COR_CARTAO);
+        uiCartao(6, AREA_Y0, 268, AREA_Y1 - AREA_Y0, 12);
         uiTexto(140, 100, 12, COR_MUDO, CENTRO, 0, "Touchpad: arraste para mover");
         uiTexto(140, 116, 12, COR_MUDO, CENTRO, 0, "Toque: clique   Segurar: direito");
         uiRetArred(280, AREA_Y0, 34, AREA_Y1 - AREA_Y0, 12, COR_CARTAO2);
@@ -338,8 +328,8 @@ static void desenharJogo(int i, bool temImagem, bool imagemRapida, float fps, u6
         if (ctl.zona == Z_MOUSE) uiCirculo(tp.px, tp.py, 14, C2D_Color32(0x75, 0xB0, 0x22, 0x80));
     } else {
         bool lt = ctl.zona == Z_LT, rt = ctl.zona == Z_RT;
-        uiRetArred(6, AREA_Y0, 151, AREA_Y1 - AREA_Y0, 14, lt ? COR_STEAM : COR_CARTAO);
-        uiRetArred(163, AREA_Y0, 151, AREA_Y1 - AREA_Y0, 14, rt ? COR_STEAM : COR_CARTAO);
+        uiCartaoSel(6, AREA_Y0, 151, AREA_Y1 - AREA_Y0, 14, lt, COR_STEAM);
+        uiCartaoSel(163, AREA_Y0, 151, AREA_Y1 - AREA_Y0, 14, rt, COR_STEAM);
         uiTexto(81, 100, 36, lt ? COR_BRANCO : COR_TEXTO, CENTRO, 0, "LT");
         uiTexto(238, 100, 36, rt ? COR_BRANCO : COR_TEXTO, CENTRO, 0, "RT");
         uiTexto(81, 142, 11, lt ? COR_BRANCO : COR_MUDO, CENTRO, 0, "gatilho esquerdo");
@@ -350,7 +340,7 @@ static void desenharJogo(int i, bool temImagem, bool imagemRapida, float fps, u6
              : modoImg == IMG_BLOCOS ? uiTexto(314, 206, 11, COR_STEAM_CL, DIR, 0, "%.1f fps  %.0f/25 blocos", fps, blocosMedia)
              : uiTexto(314, 206, 11, COR_STEAM_CL, DIR, 0, "%.1f fps", fps);
     uiTexto(6, 206, 11, COR_TEXTO2, ESQ, 300 - wf, "%s", jogos[i].nome);
-    uiTexto(6, 222, 10, COR_MUDO, ESQ, 0, "START+SELECT: biblioteca (o jogo continua no PC)");
+    uiDicas(6, 222, ESQ, "START+SELECT", "biblioteca (o jogo continua no PC)", NULL);
 }
 
 // ---------------------------------------------------------------- jogando: quadros
@@ -396,14 +386,6 @@ static bool aplicarBlocos(const u8 *lista, int n, u32 tam) {
     return true;
 }
 
-static void avisoSemSom(void) {
-    uiAviso("Sem som",
-            "Falta o arquivo sdmc:/3ds/dspfirm.cdc.\n\n"
-            "Para criar: abra o menu Rosalina\n"
-            "(L + baixo + SELECT) > Miscellaneous options\n"
-            "> Dump DSP firmware. Depois abra de novo.", IC_MUDO, COR_STEAM);
-}
-
 // ---------------------------------------------------------------- jogando
 // Retorna false se a conexão com o PC caiu.
 
@@ -425,14 +407,13 @@ static bool jogar(int sock, int i) {
     irrstInit();                        // ZL/ZR e C-stick do New 3DS (no Old falha sem problema)
     aoEsperarRede = amostrarEntrada;
 
-    // Com o som (NDSP) ligado, o HOME e a tampa são tratados aqui, como no Sintetizador:
-    // deixar o libctru suspender o app com o DSP tocando pode travar o console.
+    // o HOME e a tampa com o som ligado: ver somCuidarDoHome (som.h)
     aptSetHomeAllowed(false);
     bool podiaDormir = aptIsSleepAllowed();
     aptSetSleepAllowed(false);
     if (somQuerido && !somIniciar()) {
         somQuerido = false;
-        avisoSemSom();
+        somAvisoSemDsp(COR_STEAM);
     }
 
     bool pedido = false, pedidoBlocos = false, precisaTudo = true;
@@ -445,14 +426,9 @@ static bool jogar(int sock, int i) {
     blocosMedia = 0;
 
     while (aptMainLoop()) {
-        if (aptCheckHomePressRejected()) {
-            bool tinhaSom = somLigado();
-            somEncerrar();
-            aptJumpToHomeMenu();
-            if (aptShouldClose()) break;          // fechou pelo HOME: sai sem religar o som
-            if (tinhaSom) somIniciar();
-            continue;
-        }
+        int home = somCuidarDoHome();
+        if (home == SOM_HOME_FECHAR) break;
+        if (home == SOM_HOME_VOLTOU) continue;
         amostrarEntrada();
         u32 down = ctl.down;
         ctl.down = 0;
@@ -476,7 +452,7 @@ static bool jogar(int sock, int i) {
                     } else if (somIniciar()) {
                         somQuerido = true;
                     } else {
-                        avisoSemSom();
+                        somAvisoSemDsp(COR_STEAM);
                     }
                 }
                 if (b == 4) {
@@ -563,13 +539,7 @@ static bool jogar(int sock, int i) {
     aptSetSleepAllowed(podiaDormir);
     aptSetHomeAllowed(true);
 
-    // avisa o PC que tudo foi solto
-    memset(&ctl.p, 0, sizeof(ctl.p));
-    memcpy(ctl.p.magic, "3DS2", 4);
-    for (int k = 0; k < 5; k++) {
-        ctl.p.seq = ctl.seq++;
-        enviarPara(ctl.sock, &ctl.p, sizeof(ctl.p), &ctl.dest);
-    }
+    controleSoltarTudo(ctl.sock, &ctl.dest, &ctl.seq);
     aoEsperarRede = NULL;
     fecharRede(ctl.sock);
     irrstExit();
@@ -581,7 +551,7 @@ static bool jogar(int sock, int i) {
 // ---------------------------------------------------------------- módulo
 
 void modSteam(void) {
-    desenharConectando();
+    telaConectando("Steam", IC_PLAY, COR_STEAM_CL);
     int sock = conectarTCP(PORTA, 8000);
     if (sock == CONEXAO_CANCELADA) return;
     jpeg = malloc(MAX_JPEG + 1);
@@ -622,9 +592,13 @@ void modSteam(void) {
     int sel = 0;
     inicioLista = 0;
     u64 tSel = osGetTime();             // quando a seleção mudou (a capa grande espera parar)
+    u64 ultimoSinal = 0;
     bool caiu = false, saiu = false;
 
     while (aptMainLoop()) {
+        // biblioteca parada por 1 minuto: o PC fechava a conversa e o próximo botão
+        // dizia "a conexão caiu"
+        if (!manterConexao(sock, &ultimoSinal)) { caiu = true; break; }
         hidScanInput();
         u32 down = hidKeysDown(), rep = hidKeysDownRepeat();
         int antes = sel, jogarEste = -1;
@@ -658,6 +632,7 @@ void modSteam(void) {
         if (jogarEste >= 0) {
             if (!jogar(sock, jogarEste)) { caiu = true; break; }
             if (aptShouldClose()) break;
+            hidSetRepeatParameters(20, 5);
             continue;
         }
 

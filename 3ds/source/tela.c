@@ -102,7 +102,7 @@ static void grafico(float x, float y, float w, float h, const char *hist, u32 co
 }
 
 static void cartaoMetrica(float x, float y, const char *rotulo, int valor, const char *hist, u32 cor) {
-    uiRetArred(x, y, 120, 76, 10, COR_CARTAO);
+    uiCartao(x, y, 120, 76, 10);
     uiTexto(x + 10, y + 6, 12, COR_MUDO, ESQ, 0, "%s", rotulo);
     if (valor < 0) uiTexto(x + 10, y + 20, 22, COR_MUDO, ESQ, 0, "--");
     else           uiTexto(x + 10, y + 20, 22, cor, ESQ, 0, "%d%%", valor);
@@ -116,10 +116,12 @@ static void textoVolume(const Dados *d, char *vol, size_t n) {
     else                  snprintf(vol, n, "-");
 }
 
-static void rodape(bool conectado, const char *quem) {
+// Rodapé da tela de cima: conexão à esquerda, as dicas da cruz à direita.
+static void rodape(bool conectado) {
     uiCirculo(18, 222, 5, conectado ? COR_AGUA_CL : COR_AMARELO);
-    uiTexto(30, 214, 13, conectado ? COR_TEXTO2 : COR_AMARELO, ESQ, 0, "%s",
-            conectado ? "Conectado" : (quem[0] == 'c' ? "Procurando o celular..." : "Procurando o PC..."));
+    if (conectado) uiTexto(30, 214, 13, COR_TEXTO2, ESQ, 150, "%s", modoRemoto ? "Pela internet" : ipPC);
+    else           uiTexto(30, 214, 13, COR_AMARELO, ESQ, 150, "Procurando o %s...", nomeDoAlvo());
+    uiDicas(390, 214, DIR, "lados", "música", "cima/baixo", "volume", "START", "menu", NULL);
 }
 
 // Celular: a música em destaque (é o que mais se usa), bateria, volume e o som.
@@ -127,7 +129,7 @@ static void desenharCimaCelular(const Dados *d, bool conectado) {
     uiTela(alvoCima);
     uiBarraStatus("Segunda Tela", IC_GRAFICO, COR_AGUA_CL);
 
-    uiRetArred(10, 28, 380, 104, 12, COR_CARTAO);
+    uiCartao(10, 28, 380, 104, 12);
     uiRetArred(22, 40, 80, 80, 14, HEX(0x0F6E56));
     uiIcone(d->tocando ? IC_MUSICA : IC_PAUSE, 62, 80, 40, HEX(0x9FE1CB), HEX(0x0F6E56));
     const char *estado = d->titulo[0] ? (d->tocando ? "TOCANDO NO CELULAR" : "PAUSADO") : "NADA TOCANDO";
@@ -141,7 +143,7 @@ static void desenharCimaCelular(const Dados *d, bool conectado) {
     }
 
     // som aqui no 3DS
-    uiRetArred(10, 138, 185, 66, 12, COR_CARTAO);
+    uiCartao(10, 138, 185, 66, 12);
     uiTexto(20, 144, 12, COR_MUDO, ESQ, 0, "Som no 3DS");
     if (!somLigado()) {
         uiTexto(20, 162, 16, COR_TEXTO2, ESQ, 165, "Desligado");
@@ -162,7 +164,7 @@ static void desenharCimaCelular(const Dados *d, bool conectado) {
     }
 
     // bateria e volume do celular
-    uiRetArred(205, 138, 185, 66, 12, COR_CARTAO);
+    uiCartao(205, 138, 185, 66, 12);
     uiTexto(215, 144, 12, COR_MUDO, ESQ, 0, "Celular");
     if (d->bat >= 0) {
         uiTexto(215, 160, 16, d->bat <= 15 && !d->carg ? COR_VERMELHO : COR_TEXTO, ESQ, 0, "%d%%", d->bat);
@@ -172,8 +174,7 @@ static void desenharCimaCelular(const Dados *d, bool conectado) {
     textoVolume(d, vol, sizeof(vol));
     uiTexto(215, 184, 12, COR_TEXTO2, ESQ, 165, "Volume %s   ·   %s", vol, d->hora);
 
-    rodape(conectado, "celular");
-    uiTexto(390, 214, 13, COR_MUDO, DIR, 0, "%s", ipPC);
+    rodape(conectado);
 }
 
 static void desenharCima(const Dados *d, bool conectado) {
@@ -189,7 +190,7 @@ static void desenharCima(const Dados *d, bool conectado) {
     char down[24], up[24];
     velocidade(down, sizeof(down), d->down);
     velocidade(up, sizeof(up), d->up);
-    uiRetArred(10, 110, 185, 58, 10, COR_CARTAO);
+    uiCartao(10, 110, 185, 58, 10);
     uiTexto(20, 116, 12, COR_MUDO, ESQ, 0, "Rede");
     uiIcone(IC_SETA_BAIXO, 66, 124, 11, COR_AZUL_CL, COR_CARTAO);
     uiTexto(74, 116, 12, COR_AZUL_CL, ESQ, 50, "%s", down);
@@ -199,7 +200,7 @@ static void desenharCima(const Dados *d, bool conectado) {
     grafico(18, 136, 169, 26, d->hdown, COR_AZUL_CL);
 
     // música
-    uiRetArred(205, 110, 185, 58, 10, COR_CARTAO);
+    uiCartao(205, 110, 185, 58, 10);
     uiRetArred(213, 121, 36, 36, 8, HEX(0x0F6E56));
     uiIcone(IC_MUSICA, 231, 139, 20, HEX(0x9FE1CB), HEX(0x0F6E56));
     const char *estado = d->titulo[0] ? (d->tocando ? "Tocando agora" : "Pausado") : "Nada tocando";
@@ -208,19 +209,16 @@ static void desenharCima(const Dados *d, bool conectado) {
     uiTexto(257, 150, 11, COR_MUDO, ESQ, 128, "%s", d->artista);
 
     // bateria, disco e volume do PC
-    uiRetArred(10, 174, 380, 30, 10, COR_CARTAO);
-    char vol[24];
-    if (d->mudo)          snprintf(vol, sizeof(vol), "mudo");
-    else if (d->vol >= 0) snprintf(vol, sizeof(vol), "%d%%", d->vol);
-    else                  snprintf(vol, sizeof(vol), "-");
+    uiCartao(10, 174, 380, 30, 10);
+    char vol[16];
+    textoVolume(d, vol, sizeof(vol));
     if (d->bat >= 0)
         uiTexto(20, 181, 13, COR_TEXTO2, ESQ, 360, "Bateria %d%%%s   ·   Disco %d%%   ·   Volume %s",
                 d->bat, d->carg ? " (na tomada)" : "", d->disco, vol);
     else
         uiTexto(20, 181, 13, COR_TEXTO2, ESQ, 360, "Disco %d%%   ·   Volume %s", d->disco, vol);
 
-    rodape(conectado, "pc");
-    uiTexto(390, 214, 13, COR_MUDO, DIR, 0, "%s %s", somLigado() ? "Som aqui ·" : "PC", ipPC);
+    rodape(conectado);
 }
 
 // ---------------------------------------------------------------- tela de baixo
@@ -247,9 +245,9 @@ static void desenharBaixo(const Dados *d, int aceso) {
     uiTela(alvoBaixo);
 
     // abas
-    uiRetArred(10, 8, 145, 28, 9, pagina == 0 ? COR_VERDE_AGUA : COR_CARTAO);
+    uiCartaoSel(10, 8, 145, 28, 9, pagina == 0, COR_VERDE_AGUA);
     uiTexto(82, 14, 14, pagina == 0 ? COR_AGUA_ESC : COR_MUDO, CENTRO, 0, "Música");
-    uiRetArred(165, 8, 145, 28, 9, pagina == 1 ? COR_VERDE_AGUA : COR_CARTAO);
+    uiCartaoSel(165, 8, 145, 28, 9, pagina == 1, COR_VERDE_AGUA);
     uiTexto(237, 14, 14, pagina == 1 ? COR_AGUA_ESC : COR_MUDO, CENTRO, 0, "Atalhos");
 
     for (int i = 0; i < botoesNaPagina(); i++) {
@@ -271,37 +269,30 @@ static void desenharBaixo(const Dados *d, int aceso) {
         }
     }
 
-    if (pagina == 0 && d->celular) {
-        // celular: no lugar da dica, o botão de buscar música
+    if (pagina == 0) {
         float f = d->vol < 0 ? 0 : d->vol / 100.0f;
         char vol[16];
         textoVolume(d, vol, sizeof(vol));
         uiTexto(10, 180, 12, COR_MUDO, ESQ, 0, "Volume");
         uiTexto(310, 180, 12, d->mudo ? COR_VERMELHO : COR_TEXTO2, DIR, 0, "%s", vol);
         uiBarra(10, 196, 300, 6, d->mudo ? 0 : f, COR_AGUA_CL, COR_CARTAO);
-        uiBotao(10, 208, 300, 26, "Buscar música (Y)", IC_LUPA, COR_CARTAO2, COR_TEXTO);
-    } else if (pagina == 0) {
-        float f = d->vol < 0 ? 0 : d->vol / 100.0f;
-        char vol[16];
-        if (d->mudo)          snprintf(vol, sizeof(vol), "mudo");
-        else if (d->vol >= 0) snprintf(vol, sizeof(vol), "%d%%", d->vol);
-        else                  snprintf(vol, sizeof(vol), "-");
-        uiTexto(10, 182, 12, COR_MUDO, ESQ, 0, "Volume");
-        uiTexto(310, 182, 12, d->mudo ? COR_VERMELHO : COR_TEXTO2, DIR, 0, "%s", vol);
-        uiBarra(10, 199, 300, 8, d->mudo ? 0 : f, COR_AGUA_CL, COR_CARTAO);
-        // (sem setas unicode: a fonte do 3DS pode não ter esses símbolos)
-        uiTexto(160, 218, 11, COR_MUDO, CENTRO, 0, "A play   lados: música   cima/baixo: volume   X: som");
+        // celular: no lugar das dicas, o botão de buscar música
+        if (d->celular) uiBotao(10, 208, 300, 26, "Buscar música (Y)", IC_LUPA, COR_CARTAO2, COR_TEXTO);
+        else uiDicas(160, 214, CENTRO, "A", "play", "L/R", "aba", "X", somLigado() ? "som: ligado" : "som aqui", NULL);
     } else if (nAtalhos == 0) {
         uiTexto(160, 110, 13, COR_MUDO, CENTRO, 0, "Esperando a lista de atalhos...");
     } else {
-        uiTexto(160, 220, 11, COR_MUDO, CENTRO, 0, "%s", d->celular ? "Atalhos do celular"
+        uiTexto(160, 206, 11, COR_MUDO, CENTRO, 0, "%s", d->celular ? "Atalhos do celular"
                                                              : "Edite os atalhos no config.json do 3DS Hub");
+        uiDicas(160, 222, CENTRO, "L/R", "aba", "START", "menu", NULL);
     }
 }
 
 static bool tocouBuscar(const touchPosition *tp) {
     return pagina == 0 && uiDentro(tp, 10, 208, 300, 26);
 }
+// (as dicas dos outros botões: cruz dos lados = música, cima/baixo = volume, START = menu,
+// ficam no rodapé da tela de cima)
 
 static int botaoTocado(const touchPosition *tp, int *aba) {
     *aba = -1;
@@ -340,18 +331,13 @@ static void enviar(int sock, struct sockaddr_in *dest, const char *magic, int cm
 
 // ---------------------------------------------------------------- módulo
 
-static void avisoSemSom(void) {
-    uiAviso("Sem som",
-            "Falta o arquivo sdmc:/3ds/dspfirm.cdc.\n\n"
-            "Para criar: abra o menu Rosalina\n"
-            "(L + baixo + SELECT) > Miscellaneous options\n"
-            "> Dump DSP firmware. Depois abra de novo.", IC_MUDO, COR_VERDE_AGUA);
-}
-
 void modTela(void) {
     struct sockaddr_in dest;
     int sock = abrirUDP(PORTA, &dest);
-    if (sock < 0) return;
+    if (sock < 0) {
+        avisoSemConexao("Segunda Tela", IC_GRAFICO, COR_VERDE_AGUA);
+        return;
+    }
 
     static Dados d;
     memset(&d, 0, sizeof(d));
@@ -363,8 +349,7 @@ void modTela(void) {
     int aceso = -1, framesAceso = 0;
     bool somDecidido = false;           // no celular, o som liga sozinho uma vez
 
-    // Com o som (NDSP) ligado, o HOME e a tampa são tratados aqui, como na Steam:
-    // deixar o libctru suspender o app com o DSP tocando pode travar o console.
+    // o HOME e a tampa com o som ligado: ver somCuidarDoHome (som.h)
     aptSetHomeAllowed(false);
     bool podiaDormir = aptIsSleepAllowed();
     aptSetSleepAllowed(false);
@@ -372,14 +357,9 @@ void modTela(void) {
     static char buf[2048];
 
     while (aptMainLoop()) {
-        if (aptCheckHomePressRejected()) {
-            bool tinhaSom = somLigado();
-            somEncerrar();
-            aptJumpToHomeMenu();
-            if (aptShouldClose()) break;
-            if (tinhaSom) somIniciar();
-            continue;
-        }
+        int home = somCuidarDoHome();
+        if (home == SOM_HOME_FECHAR) break;
+        if (home == SOM_HOME_VOLTOU) continue;
         hidScanInput();
         u32 down = hidKeysDown();
         if (down & KEY_START) break;
@@ -387,7 +367,7 @@ void modTela(void) {
         if (down & KEY_X) {
             somDecidido = true;
             if (somLigado()) somEncerrar();
-            else if (!somIniciar()) avisoSemSom();
+            else if (!somIniciar()) somAvisoSemDsp(COR_VERDE_AGUA);
         }
         if ((down & KEY_Y) && d.celular) buscarMusica(sock, &dest);
         if (somLigado()) somAtualizar();
@@ -436,7 +416,7 @@ void modTela(void) {
                 ultimaResposta = osGetTime();
                 if (d.celular && !somDecidido) {
                     somDecidido = true;
-                    if (!somIniciar()) avisoSemSom();
+                    if (!somIniciar()) somAvisoSemDsp(COR_VERDE_AGUA);
                 }
             }
         }

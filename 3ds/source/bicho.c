@@ -121,6 +121,7 @@ static u8 *baixando;
 static int baixTam, baixParte, baixTotal;
 static u32 baixCrc;
 static u64 baixPedido;
+static u32 skinRuim;                    // skin que chegou estragada: não baixa de novo sem parar
 
 static bool montarSkin(const u8 *d, int n) {
     skinOk = false;
@@ -443,7 +444,7 @@ static void desenharCima(int h, u64 agora) {
 
     // balão de fala
     if (agora < b.falaAte) {
-        float lw = uiTexto(-1000, 0, 12, COR_TEXTO, ESQ, 0, "%s", b.fala) + 16;
+        float lw = uiLarguraTexto(b.fala, 12) + 16;
         float bx = 200 - lw / 2, by = y - 30;
         if (by < UI_BARRA + 2) by = UI_BARRA + 2;
         uiRetArred(bx, by, lw, 20, 8, COR_BRANCO);
@@ -516,7 +517,11 @@ static void desenharBaixo(int h, u64 agora, int arrastando, touchPosition tp) {
         uiTexto(comidaX(i) + 16, BANDEJA_Y + 32, 9, HEX(0x5A3C24), CENTRO, 0, "%s", comidas[i].nome);
     }
     if (arrastando >= 0) pixels(comidas[arrastando].spr, 9, 8, tp.px - 18, tp.py - 16, 4.5f);
-    else uiTexto(160, 166, 10, HEX(0x8A6A4A), CENTRO, 0, "Esfregue para fazer carinho - START: sair");
+    else {
+        uiRetArred(36, 160, 248, 20, 10, HEX(0x6E4B2E));
+        uiTexto(48, 164, 10, HEX(0xF8E8D0), ESQ, 0, "Esfregue para fazer carinho");
+        uiDicas(274, 163, DIR, "START", "sair", NULL);
+    }
 }
 
 // ---------------------------------------------------------------- módulo
@@ -526,7 +531,7 @@ void modBicho(void) {
     memset(coracoes, 0, sizeof(coracoes));
     carregar();
     skinOk = false;
-    skinCrc = 0;
+    skinCrc = skinRuim = 0;
     carregarSkin();
     baixando = NULL;
 
@@ -578,6 +583,8 @@ void modBicho(void) {
                             skinCrc = baixCrc;
                             salvarSkin(baixando, baixTam, baixCrc);
                             falar("Roupa nova!", 2500);
+                        } else {
+                            skinRuim = baixCrc;                     // (antes baixava de novo para sempre)
                         }
                         free(baixando);
                         baixando = NULL;
@@ -585,7 +592,7 @@ void modBicho(void) {
                 }
             }
             // o PC tem uma skin diferente da guardada: baixa em pedaços
-            if (b.skinPC && b.skinPC != skinCrc && !baixando && comPC()) {
+            if (b.skinPC && b.skinPC != skinCrc && b.skinPC != skinRuim && !baixando && comPC()) {
                 baixando = malloc(MAX_SKIN);
                 baixTam = baixParte = baixTotal = 0;
                 baixCrc = b.skinPC;

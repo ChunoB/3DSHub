@@ -18,10 +18,12 @@
 
 typedef struct {
     bool usado, datagramas, fechado;
+    bool enviando;                      // um envio deste túnel está esperando a rede
     CURL *c;
     curl_socket_t fd;
     u8 *rx;    size_t nrx, caprx;       // bytes da rede ainda não separados em mensagens
     u8 *flx;   size_t nflx, capflx;     // fluxo (TCP) pronto para ler
+    u8 *tx;    size_t captx;            // mensagem sendo enviada (um por túnel: ver tunelEnviar)
     u8 *msg[MAX_MSGS]; size_t tamMsg[MAX_MSGS];
     int inicio, quantas;                // fila de mensagens (UDP)
 } Tunel;
@@ -418,6 +420,7 @@ static void liberar(Tunel *t) {
     if (t->c) curl_easy_cleanup(t->c);
     free(t->rx);
     free(t->flx);
+    free(t->tx);
     for (int i = 0; i < t->quantas; i++) free(t->msg[(t->inicio + i) % MAX_MSGS]);
     memset(t, 0, sizeof(*t));
 }
@@ -505,16 +508,18 @@ void tunelFechar(int h) {
 
 bool tunelEnviar(int h, const void *dados, size_t n, int timeoutMs) {
     Tunel *t = pegar(h);
-    if (!t || t->fechado) return false;
-    static u8 *buf;
-    static size_t cap;
+    if (!t || t->fechado || t->enviando) return false;   // (enviando: perde, como um pacote UDP)
+    // O buffer é de cada túnel. Antes era um só para todos: enquanto um envio esperava a
+    // rede (enviarBruto chama aoEsperarRede), a Steam mandava o controle por outro túnel,
+    // escrevia por cima do envio parado no meio e a conexão pela internet quebrava.
     size_t total = n + 14;
-    if (total > cap) {
-        u8 *nb = realloc(buf, total);
+    if (total > t->captx) {
+        u8 *nb = realloc(t->tx, total);
         if (!nb) return false;
-        buf = nb;
-        cap = total;
+        t->tx = nb;
+        t->captx = total;
     }
+    u8 *buf = t->tx;
     size_t k = 0;
     buf[k++] = 0x82;                                   // mensagem binária, completa
     if (n < 126) buf[k++] = 0x80 | n;
@@ -527,7 +532,10 @@ bool tunelEnviar(int h, const void *dados, size_t n, int timeoutMs) {
     for (int i = 0; i < 4; i++) m[i] = buf[k++] = rand() & 0xFF;
     const u8 *p = dados;
     for (size_t i = 0; i < n; i++) buf[k + i] = p[i] ^ m[i & 3];
-    return enviarBruto(t, buf, k + n, timeoutMs);
+    t->enviando = true;
+    bool ok = enviarBruto(t, buf, k + n, timeoutMs);
+    t->enviando = false;
+    return ok;
 }
 
 bool tunelReceberTudo(int h, void *dados, size_t n, int timeoutMs) {

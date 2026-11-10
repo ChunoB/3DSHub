@@ -72,9 +72,13 @@ static void desenharMensagem(const char *titulo, const char *texto, float progre
     uiQuadro();
     uiTela(alvoCima);
     uiBarraStatus("Ajustes", IC_ENGRENAGEM, COR_TEXTO2);
-    uiTexto(200, 70, 20, COR_TEXTO, CENTRO, 360, "%s", titulo);
-    uiTexto(200, 104, 13, COR_TEXTO2, CENTRO, 0, "%s", texto);
-    if (progresso >= 0) uiBarra(60, 160, 280, 12, progresso, COR_AGUA_CL, COR_CARTAO);
+    uiCartao(12, 54, 376, progresso >= 0 ? 132 : 100, 14);
+    uiTexto(200, 72, 20, COR_TEXTO, CENTRO, 350, "%s", titulo);
+    uiTexto(200, 106, 13, COR_TEXTO2, CENTRO, 0, "%s", texto);
+    if (progresso >= 0) {
+        uiBarra(60, 152, 280, 10, progresso, COR_AGUA_CL, COR_CARTAO2);
+        uiTexto(200, 166, 11, COR_MUDO, CENTRO, 0, "%d%%", (int)(progresso * 100));
+    }
     uiTela(alvoBaixo);
     if (rodape) uiTexto(160, 110, 14, COR_MUDO, CENTRO, 300, "%s", rodape);
     uiFim();
@@ -82,28 +86,7 @@ static void desenharMensagem(const char *titulo, const char *texto, float progre
 
 // Pergunta sim/não com dois botões grandes. A/toque no da esquerda = sim.
 static bool confirmar(const char *titulo, const char *texto, const char *sim, const char *nao) {
-    while (aptMainLoop()) {
-        hidScanInput();
-        u32 down = hidKeysDown();
-        touchPosition tp;
-        hidTouchRead(&tp);
-        if (down & KEY_A) return true;
-        if (down & (KEY_B | KEY_START)) return false;
-        if (down & KEY_TOUCH) {
-            if (uiDentro(&tp, 10, 150, 145, 60)) return true;
-            if (uiDentro(&tp, 165, 150, 145, 60)) return false;
-        }
-        uiQuadro();
-        uiTela(alvoCima);
-        uiBarraStatus("Ajustes", IC_ENGRENAGEM, COR_TEXTO2);
-        uiTexto(200, 64, 20, COR_TEXTO, CENTRO, 360, "%s", titulo);
-        uiTexto(200, 100, 13, COR_TEXTO2, CENTRO, 0, "%s", texto);
-        uiTela(alvoBaixo);
-        uiBotao(10, 150, 145, 60, sim, IC_OK, COR_VERDE_AGUA, COR_AGUA_ESC);
-        uiBotao(165, 150, 145, 60, nao, IC_X, COR_CARTAO, COR_TEXTO);
-        uiFim();
-    }
-    return false;
+    return uiConfirmar("Ajustes", IC_ENGRENAGEM, COR_VERDE_AGUA, titulo, texto, sim, nao, NULL);
 }
 
 // ---------------------------------------------------------------- conversa com o PC
@@ -173,10 +156,16 @@ static void gravar(int i) {
         ? snprintf(cmd, sizeof(cmd), "W %s %d\n", linhas[i].chave, valores[i] != 0)
         : snprintf(cmd, sizeof(cmd), "W %s %g\n", linhas[i].chave, valores[i]);
     u32 ok;
-    if (!enviarTudo(sock, cmd, n, 3000) || !lerResposta("3DSW", &ok)) {
-        desconectar();
-        snprintf(status, sizeof(status), "A conexão com o PC caiu");
+    if (enviarTudo(sock, cmd, n, 3000) && lerResposta("3DSW", &ok)) return;
+    // caiu (o PC fecha a conversa parada, ou o Hub reiniciou): conecta de novo e repete
+    float valor = valores[i];
+    conectar();
+    if (sock >= 0 && temValores) {
+        valores[i] = valor;
+        if (enviarTudo(sock, cmd, n, 3000) && lerResposta("3DSW", &ok)) return;
     }
+    desconectar();
+    snprintf(status, sizeof(status), "A conexão com o PC caiu");
 }
 
 // ---------------------------------------------------------------- ligar e suspender o PC
@@ -201,7 +190,7 @@ static void lerPCsLigar(void) {
         if (!a || !b) continue;
         *a = *b = 0;
         PCLigar *p = &pcsLigar[nLigar++];
-        snprintf(p->nome, sizeof(p->nome), "%s", l);
+        snprintf(p->nome, sizeof(p->nome), "%.31s", l);
         snprintf(p->broadcast, sizeof(p->broadcast), "%s", a + 1);
         snprintf(p->macs, sizeof(p->macs), "%s", b + 1);
     }
@@ -330,6 +319,7 @@ static void ligarPC(void) {
 }
 
 static void suspenderPC(void) {
+    if (sock < 0) conectar();
     if (sock < 0) {
         uiAviso("Suspender o PC", "Sem conexão com o PC.", IC_PC, COR_AMARELO);
         return;
@@ -440,7 +430,8 @@ bool escolherAparelho(void) {
             uiTexto(20, y + 7, 13, s2 ? COR_BRANCO : COR_TEXTO, ESQ, 170, "%s%s", nomeLinha, emUso ? "  (em uso)" : "");
             uiTexto(300, y + 7, 13, s2 ? COR_BRANCO : rede ? COR_MUDO : COR_AZUL_CL, DIR, 0, "%s", rede ? ips[i] : "pela internet");
         }
-        uiTexto(160, 222, 11, COR_MUDO, CENTRO, 0, "A ou toque: escolher   B: voltar");
+        uiRolagem(313, 40, LINHAS_VISIVEIS * 34 - 4, total, LINHAS_VISIVEIS, topo, COR_AGUA_CL);
+        uiDicas(160, 222, CENTRO, "A", "escolher", "B", "voltar", NULL);
         uiFim();
     }
     if (s >= 0) close(s);
@@ -515,13 +506,19 @@ static void atualizar(void) {
     bool ehCia = !envIsHomebrew();
     const char *tipo = ehCia ? "cia" : "3dsx";
 
-    // o que o PC tem
+    // o que o PC tem (se a conversa tinha caído, conecta de novo e pergunta outra vez)
     char cmd[16];
     int n = snprintf(cmd, sizeof(cmd), "I %s\n", tipo);
     char cab[12];
-    if (!enviarTudo(sock, cmd, n, 3000) || !receberTudo(sock, cab, 12, 5000) || memcmp(cab, "3DSI", 4)) {
-        desconectar();
-        uiAviso("Sem conexão", "A conexão com o PC caiu.", IC_X, COR_AMARELO);
+    bool respondeu = false;
+    for (int tentativa = 0; tentativa < 2 && !respondeu; tentativa++) {
+        if (sock < 0) conectar();
+        if (sock < 0) break;
+        respondeu = enviarTudo(sock, cmd, n, 3000) && receberTudo(sock, cab, 12, 5000) && !memcmp(cab, "3DSI", 4);
+        if (!respondeu) desconectar();
+    }
+    if (!respondeu) {
+        uiAviso("Sem conexão", "A conexão com o PC caiu.\nConfira se o 3DS Hub está aberto no PC.", IC_X, COR_AMARELO);
         return;
     }
     u32 tamPC, crcPC;
@@ -785,26 +782,27 @@ static void desenhar(int sel) {
     uiQuadro();
     uiTela(alvoCima);
     uiBarraStatus("Ajustes", IC_ENGRENAGEM, COR_TEXTO2);
-    uiRetArred(16, 32, 368, 96, 12, COR_CARTAO);
-    uiTexto(30, 42, 18, COR_TEXTO, ESQ, 340, "%s", l->rotulo);
+    uiCartao(16, 32, 368, 96, 12);
+    uiTexto(30, 42, 18, COR_TEXTO, ESQ, 300, "%s", l->rotulo);
+    uiTexto(370, 46, 11, COR_MUDO, DIR, 0, "%d de %d", sel + 1, N_LINHAS);
     uiTexto(30, 70, 13, COR_TEXTO2, ESQ, 0, "%s", l->ajuda);
 
-    uiRetArred(16, 136, 368, 56, 12, COR_CARTAO);
+    uiCartao(16, 136, 368, 56, 12);
     uiIcone(IC_PC, 36, 164, 18, COR_MUDO, COR_CARTAO);
-    uiTexto(54, 144, 13, COR_TEXTO, ESQ, 320, "%s", nomePC[0] ? nomePC : "PC");
-    uiTexto(54, 162, 13, COR_MUDO, ESQ, 320, "%s", ipPC[0] ? ipPC : "sem IP");
+    uiTexto(54, 144, 13, COR_TEXTO, ESQ, 220, "%s", nomePC[0] ? nomePC : "PC");
+    uiTexto(54, 162, 13, COR_MUDO, ESQ, 220, "%s", modoRemoto ? "pela internet" : ipPC[0] ? ipPC : "sem IP");
     bool ok = sock >= 0 && temValores;
     uiTexto(372, 152, 13, ok ? COR_AGUA_CL : COR_AMARELO, DIR, 0, "%s", ok ? "Conectado" : "Sem conexão");
     if (status[0]) uiTexto(16, 200, 13, COR_AMARELO, ESQ, 368, "%s", status);
     else if (precisaDoPC(sel) && ok) uiTexto(16, 200, 13, COR_MUDO, ESQ, 368, "As mudanças valem na hora (o PC grava no config.json).");
-    uiTexto(16, 220, 12, COR_MUDO, ESQ, 0, "START ou B: voltar ao menu");
+    uiTexto(384, 222, 11, COR_MUDO, DIR, 0, "3DS Hub v%s", updater_version());
 
     uiTela(alvoBaixo);
     for (int i = inicio; i < N_LINHAS && i < inicio + VISIVEIS; i++) {
         bool s = i == sel;
         float y = linhaY(i);
         bool apagada = precisaDoPC(i) && !temValores;
-        uiRetArred(10, y, 300, LINHA_H, 8, s ? COR_CARTAO2 : COR_CARTAO);
+        uiCartaoSel(10, y, 300, LINHA_H, 8, s, COR_CARTAO2);
         if (s) uiRet(10, y + 5, 3, LINHA_H - 10, COR_AGUA_CL);
         uiTexto(20, y + 5, 13, apagada ? COR_MUDO : COR_TEXTO, ESQ, 150, "%s", linhas[i].rotulo);
         char v[48];
@@ -816,7 +814,11 @@ static void desenhar(int sel) {
             uiBotao(272, y + 2, 36, LINHA_H - 4, "+", -1, COR_CARTAO, COR_TEXTO);
         }
     }
-    uiTexto(160, 222, 11, COR_MUDO, CENTRO, 0, "A: escolher   esquerda/direita: mudar");
+    uiRolagem(313, 8, VISIVEIS * (LINHA_H + 3) - 3, N_LINHAS, VISIVEIS, inicio, COR_AGUA_CL);
+    if ((linhas[sel].tipo == NUMERO && temValores) || (linhas[sel].tipo == LIGAR && nLigar > 1))
+        uiDicas(160, 222, CENTRO, "A", "escolher", "lados", linhas[sel].tipo == LIGAR ? "outro PC" : "mudar", "B", "voltar", NULL);
+    else
+        uiDicas(160, 222, CENTRO, "A", "escolher", "B", "voltar ao menu", NULL);
     uiFim();
 }
 
@@ -837,9 +839,14 @@ void modAjustes(void) {
     int sel = 0;
     inicio = 0;
     status[0] = 0;
+    hidSetRepeatParameters(22, 5);
     conectar();
+    u64 ultimoSinal = 0;
 
     while (aptMainLoop() && !sairDoApp) {
+        // parado nesta tela por mais de 1 minuto o PC fechava a conversa, e a próxima
+        // coisa que você fizesse dizia "a conexão caiu"
+        if (sock >= 0 && !manterConexao(sock, &ultimoSinal)) desconectar();
         hidScanInput();
         u32 down = hidKeysDown();
         touchPosition tp;
@@ -847,10 +854,11 @@ void modAjustes(void) {
         if (down & (KEY_START | KEY_B)) break;
 
         int acao = -1, direcao = 0;
-        if ((down & KEY_DUP) && sel > 0) sel--;
-        if ((down & KEY_DDOWN) && sel < N_LINHAS - 1) sel++;
-        if (down & KEY_DLEFT) direcao = -1;
-        if (down & KEY_DRIGHT) direcao = 1;
+        u32 rep = hidKeysDownRepeat();
+        if ((rep & KEY_UP) && sel > 0) sel--;
+        if ((rep & KEY_DOWN) && sel < N_LINHAS - 1) sel++;
+        if (rep & KEY_LEFT) direcao = -1;
+        if (rep & KEY_RIGHT) direcao = 1;
         if (down & KEY_A) acao = sel;
         if (down & KEY_TOUCH) {
             for (int i = inicio; i < N_LINHAS && i < inicio + VISIVEIS; i++) {

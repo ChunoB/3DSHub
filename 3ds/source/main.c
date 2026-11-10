@@ -2,8 +2,8 @@
 // Do outro lado pode estar o PC (pasta pc) ou o celular (pasta android): o celular
 // responde nas mesmas portas, e os módulos que ele ainda não tem avisam isso.
 //
-// Menu: cruz ou toque = escolher, A = abrir, Y = Ajustes, SELECT = escolher o PC ou
-// celular, START duas vezes = sair
+// Menu: cruz, circle pad ou toque = escolher (L/R = anterior/próximo), A = abrir,
+// Y = Ajustes, SELECT = escolher o PC ou celular, START duas vezes = sair
 //
 // O menu procura o PC sozinho (descoberta na rede) sempre que o Hub não responde.
 
@@ -12,6 +12,7 @@
 #include "tunel.h"
 
 #include <curl/curl.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -68,12 +69,63 @@ static const Item itens[] = {
 #define N_ITENS (int)(sizeof(itens) / sizeof(itens[0]))
 #define ITEM_AJUSTES (N_ITENS - 1)
 
-// grade de 2 colunas na tela de baixo; sobrando um no fim (Ajustes), ele ocupa a linha toda
-#define TILE_W 145
-#define TILE_H 40
-static float tileX(int i) { return 10 + (i % 2) * (TILE_W + 10); }
-static float tileY(int i) { return 8 + (i / 2) * (TILE_H + 5); }
-static float tileW(int i) { return i == N_ITENS - 1 && N_ITENS % 2 ? 2 * TILE_W + 10 : TILE_W; }
+// Tela de baixo: os módulos numa grade de 3 colunas e, embaixo, a barra dos Ajustes
+// (sempre o último item).
+#define COLUNAS  3
+#define N_GRADE  (N_ITENS - 1)
+#define TILE_W   96
+#define TILE_H   58
+#define TILE_VAO 7
+#define BARRA_Y  203
+#define BARRA_H  30
+static float tileX(int i) { return i == ITEM_AJUSTES ? 8 : 9 + (i % COLUNAS) * (TILE_W + TILE_VAO); }
+static float tileY(int i) { return i == ITEM_AJUSTES ? BARRA_Y : 7 + (i / COLUNAS) * (TILE_H + TILE_VAO); }
+static float tileW(int i) { return i == ITEM_AJUSTES ? 304 : TILE_W; }
+static float tileH(int i) { return i == ITEM_AJUSTES ? BARRA_H : TILE_H; }
+
+static int tileNoToque(const touchPosition *tp) {
+    for (int i = 0; i < N_ITENS; i++)
+        if (uiDentro(tp, tileX(i), tileY(i), tileW(i), tileH(i))) return i;
+    return -1;
+}
+
+// Anda na grade. Dos lados segue a ordem dos módulos (do fim de uma linha para o começo
+// da outra); para cima e para baixo dá a volta passando pelos Ajustes.
+static int colunaLembrada;
+static int mover(int sel, int dx, int dy) {
+    if (sel != ITEM_AJUSTES) colunaLembrada = sel % COLUNAS;
+    if (dx) return (sel + dx + N_ITENS) % N_ITENS;
+    if (sel == ITEM_AJUSTES) {
+        int linhas = (N_GRADE + COLUNAS - 1) / COLUNAS;
+        int alvo = (dy < 0 ? linhas - 1 : 0) * COLUNAS + colunaLembrada;
+        return alvo < N_GRADE ? alvo : N_GRADE - 1;
+    }
+    int alvo = sel + dy * COLUNAS;
+    return alvo < 0 || alvo >= N_GRADE ? ITEM_AJUSTES : alvo;
+}
+
+// O último módulo aberto fica guardado: o menu abre nele da próxima vez.
+#define ARQ_MENU "sdmc:/3ds/3dshub_menu.cfg"
+static int moduloGravado = -1;
+static int lerUltimoModulo(void) {
+    char nome[32] = "";
+    FILE *f = fopen(ARQ_MENU, "r");
+    if (!f) return 0;
+    if (!fgets(nome, sizeof(nome), f)) nome[0] = 0;
+    fclose(f);
+    nome[strcspn(nome, "\r\n")] = 0;
+    for (int i = 0; i < N_GRADE; i++)
+        if (!strcmp(nome, itens[i].nome)) return moduloGravado = i;
+    return 0;
+}
+static void gravarUltimoModulo(int i) {
+    if (i == moduloGravado || i == ITEM_AJUSTES) return;
+    FILE *f = fopen(ARQ_MENU, "w");
+    if (!f) return;
+    fprintf(f, "%s\n", itens[i].nome);
+    fclose(f);
+    moduloGravado = i;
+}
 
 // ---------------------------------------------------------------- sonda do Hub
 // Manda um "ping" (3DSP) para a Segunda Tela do PC: se responder, o Hub está no ar.
@@ -126,8 +178,9 @@ static void mensagemRapida(const char *titulo, const char *texto) {
     uiQuadro();
     uiTela(alvoCima);
     uiBarraStatus("3DS Hub", IC_CONTROLE, COR_TEXTO);
-    uiTexto(200, 90, 18, COR_TEXTO, CENTRO, 360, "%s", titulo);
-    uiTexto(200, 122, 13, COR_TEXTO2, CENTRO, 360, "%s", texto);
+    uiCartao(12, 70, 376, 84, 14);
+    uiTexto(200, 86, 18, COR_TEXTO, CENTRO, 350, "%s", titulo);
+    uiTexto(200, 116, 13, COR_TEXTO2, CENTRO, 350, "%s", texto);
     uiTela(alvoBaixo);
     uiFim();
 }
@@ -211,58 +264,161 @@ static void rodarDescoberta(u32 quadro) {
 
 static u64 confirmarSaidaAte;   // primeiro START: pede o segundo para sair
 
-static void desenharMenu(int sel, bool temIP) {
-    const Item *it = &itens[sel];
+// Movimento do menu: tudo chega aos poucos no lugar (uiSuave), nada pula.
+static struct {
+    float destaque[N_ITENS];    // 0 = tile normal, 1 = escolhido
+    float aperto[N_ITENS];      // 1 = com o dedo em cima
+    float salto;                // o ícone grande "salta" ao trocar de módulo
+    float entrada;              // 1 -> 0: a cor do módulo fechado some por cima do menu
+    u32   corEntrada;
+    u32   cor, corClara;        // cor do módulo escolhido, misturada aos poucos
+    int   selAntes;
+} anim = { .selAntes = -1 };
 
-    uiTela(alvoCima);
+static void animar(int sel, int apertado) {
+    if (anim.selAntes < 0) {                    // primeiro quadro: já começa no lugar
+        anim.cor = itens[sel].cor;
+        anim.corClara = itens[sel].corClara;
+        anim.destaque[sel] = 1;
+        anim.entrada = 1;
+        anim.corEntrada = COR_ESCURO;
+    } else if (sel != anim.selAntes) {
+        anim.salto = 1;
+    }
+    anim.selAntes = sel;
+    for (int i = 0; i < N_ITENS; i++) {
+        anim.destaque[i] = uiSuave(anim.destaque[i], i == sel, 0.35f);
+        anim.aperto[i] = uiSuave(anim.aperto[i], i == apertado, 0.5f);
+    }
+    anim.salto = uiSuave(anim.salto, 0, 0.22f);
+    anim.entrada = uiSuave(anim.entrada, 0, 0.2f);
+    anim.cor = uiMistura(anim.cor, itens[sel].cor, 0.3f);
+    anim.corClara = uiMistura(anim.corClara, itens[sel].corClara, 0.3f);
+}
+
+// Faixa de aviso da tela de cima (uma linha).
+static void faixa(u32 fundo, u32 cor, int icone, const char *texto) {
+    uiRetArred(12, 166, 376, 24, 12, fundo);
+    if (icone >= 0) {
+        float w = uiLarguraTexto(texto, 13) + 20;
+        uiIcone(icone, 200 - w / 2 + 6, 178, 13, cor, fundo);
+        uiTexto(200 + 10, 171, 13, cor, CENTRO, 330, "%s", texto);
+    } else {
+        uiTexto(200, 171, 13, cor, CENTRO, 356, "%s", texto);
+    }
+}
+
+static void desenharTile(int i, bool cel) {
+    const Item *it = &itens[i];
+    float d = anim.destaque[i], ap = anim.aperto[i];
+    float cresce = 2 * d - 2 * ap;              // o escolhido cresce; o apertado afunda
+    float x = tileX(i) - cresce, y = tileY(i) - cresce, w = tileW(i) + 2 * cresce, h = tileH(i) + 2 * cresce;
+    bool apagado = cel && !it->noCelular;       // módulo que o celular não tem
+
+    u32 fundo = uiMistura(COR_CARTAO, it->cor, d);
+    if (ap > 0) fundo = uiMistura(fundo, COR_ESCURO, 0.3f * ap);
+    u32 borda = uiMistura(COR_BORDA, it->corClara, d * 0.8f);
+    u32 corIcone = uiMistura(apagado ? COR_LINHA : it->corClara, COR_BRANCO, d);
+    u32 corTexto = uiMistura(apagado ? COR_MUDO : COR_TEXTO2, COR_BRANCO, d);
+    uiCartaoCor(x, y, w, h, 12, fundo, borda);
+
+    if (i == ITEM_AJUSTES) {                    // barra: ícone e nome à esquerda, versão à direita
+        float cy = y + h / 2;
+        uiIcone(it->icone, x + 20, cy, 16, corIcone, fundo);
+        uiTexto(x + 36, cy - 7, 13, corTexto, ESQ, 0, "%s", it->nome);
+        float wv = uiTexto(x + w - 12, cy - 6, 11, uiMistura(COR_MUDO, COR_TEXTO, d), DIR, 0, "v" APP_VERSION);
+        uiDica(x + w - 12 - wv - 26, cy - UI_DICA / 2.0f, "Y", NULL);
+        return;
+    }
+    float cx = x + w / 2;
+    uiIcone(it->icone, cx, y + h / 2 - 8, 26, corIcone, fundo);
+    float tam = uiLarguraTexto(it->nome, 12) > TILE_W - 8 ? 11 : 12;
+    uiTexto(cx, y + h - 20, tam, corTexto, CENTRO, w - 6, "%s", it->nome);
+}
+
+static void desenharMenu(int sel, int apertado, bool temIP) {
+    const Item *it = &itens[sel];
+    bool cel = alvoCelular();
+    animar(sel, apertado);
+
+    // ---- tela de cima: o módulo escolhido em destaque, na cor dele
+    uiTelaGrad(alvoCima, uiMistura(COR_FUNDO, anim.cor, 0.22f), COR_FUNDO);
     uiBarraStatus("3DS Hub", IC_CONTROLE, COR_TEXTO);
 
-    uiRetArred(16, 36, 64, 64, 16, it->cor);
-    uiIcone(it->icone, 48, 68, 38, COR_BRANCO, it->cor);
-    uiTexto(94, 42, 22, COR_TEXTO, ESQ, 290, "%s", it->nome);
-    bool cel = alvoCelular();
-    uiTexto(94, 72, 13, it->corClara, ESQ, 290, "%s", cel && it->subCelular ? it->subCelular : it->subtitulo);
+    u32 corCartao = uiMistura(COR_CARTAO, anim.cor, 0.12f);
+    uiCartaoCor(12, 30, 376, 130, 14, corCartao, uiMistura(COR_BORDA, anim.cor, 0.45f));
+    uiIcone(it->icone, 322, 95, 112, uiMistura(corCartao, anim.cor, 0.2f), corCartao);    // marca d'água
+
+    float t = 60 + 8 * anim.salto;              // o quadrado do ícone salta e volta
+    uiRetArred(56 - t / 2, 72 - t / 2, t, t, 16, anim.cor);
+    uiIcone(it->icone, 56, 72, 34 + 5 * anim.salto, COR_BRANCO, anim.cor);
+    uiTexto(100, 44, 22, COR_TEXTO, ESQ, 276, "%s", it->nome);
+    uiTexto(100, 72, 13, anim.corClara, ESQ, 276, "%s", cel && it->subCelular ? it->subCelular : it->subtitulo);
     if (cel && !it->noCelular) {
-        uiRetArred(94, 92, 150, 18, 9, COR_CARTAO2);
-        uiTexto(169, 94, 11, COR_TEXTO2, CENTRO, 0, "Só com o PC");
+        uiRetArred(100, 90, 84, 15, 7.5f, COR_CARTAO2);
+        uiTexto(142, 92, 10, COR_TEXTO2, CENTRO, 0, "Só com o PC");
     }
-    uiTexto(16, 114, 13, COR_TEXTO2, ESQ, 0, "%s", it->descricao);
+    uiTexto(26, 112, 13, COR_TEXTO2, ESQ, 0, "%s", it->descricao);
 
-    if (osGetTime() < confirmarSaidaAte) {
-        uiRetArred(16, 166, 368, 28, 10, COR_CARTAO2);
-        uiTexto(200, 172, 13, COR_TEXTO, CENTRO, 340, "Aperte START de novo para sair do 3DS Hub");
-    } else if (osGetTime() < avisoAte) {
-        uiRetArred(16, 166, 368, 28, 10, HEX(0x085041));
-        uiIcone(IC_OK, 32, 180, 14, COR_AGUA_CL, HEX(0x085041));
-        uiTexto(46, 172, 13, COR_AGUA_CL, ESQ, 330, "%s", aviso);
-    } else if (outroNaRede && temIP) {
-        uiRetArred(16, 166, 368, 28, 10, HEX(0x4A3410));
-        uiTexto(200, 172, 13, COR_AMARELO, CENTRO, 340, "Não responde. SELECT escolhe outro aparelho");
-    } else {
-        uiTexto(384, 184, 11, COR_MUDO, DIR, 0, "SELECT: trocar de PC ou celular");
-    }
+    // ---- avisos (ou as dicas dos botões)
+    if (osGetTime() < confirmarSaidaAte)
+        faixa(COR_CARTAO2, COR_TEXTO, -1, "Aperte START de novo para sair do 3DS Hub");
+    else if (osGetTime() < avisoAte)
+        faixa(HEX(0x085041), COR_AGUA_CL, IC_OK, aviso);
+    else if (outroNaRede && temIP)
+        faixa(HEX(0x4A3410), COR_AMARELO, -1, "Não responde. SELECT escolhe outro aparelho");
+    else
+        uiDicas(200, 171, CENTRO, "A", "abrir", "Y", "ajustes", "SELECT", "trocar de PC ou celular", NULL);
 
-    // rodapé: qual PC e se o Hub respondeu
-    uiRet(16, 202, 368, 1, COR_LINHA);
-    uiIcone(IC_PC, 26, 220, 14, COR_MUDO, COR_FUNDO);   // (o mesmo ícone para PC e celular)
-    if (modoRemoto)     uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "%s (pela internet)", nomePC[0] ? nomePC : "PC");
-    else if (!ipPC[0])  uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "PC: procurando...");
-    else if (nomePC[0]) uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "%s (%s)", nomePC, ipPC);
-    else                uiTexto(38, 212, 13, COR_MUDO, ESQ, 190, "PC %s", ipPC);
+    // ---- rodapé: qual aparelho e se o Hub respondeu
     bool hubOk = hubRespondendo();
     u32 cor = !temIP ? COR_VERMELHO : hubOk ? COR_AGUA_CL : COR_AMARELO;
     const char *estado = !temIP ? "3DS sem Wi-Fi" : hubOk ? (modoRemoto ? "Conectado pela internet"
-                                                                          : alvoCelular() ? "Celular encontrado" : "Hub encontrado")
+                                                                          : cel ? "Celular encontrado" : "Hub encontrado")
                                                           : (modoRemoto ? "Conectando pela internet..." : "Procurando o Hub...");
-    float w = uiTexto(384, 212, 13, cor, DIR, 0, "%s", estado);
-    uiIcone(hubOk && temIP ? IC_OK : IC_X, 384 - w - 10, 220, 12, cor, COR_FUNDO);
+    uiCartao(12, 198, 376, 32, 12);
+    float w = uiTexto(378, 207, 13, cor, DIR, 0, "%s", estado);
+    // procurando: a bolinha pulsa; achou: fica acesa
+    float pulso = hubOk || !temIP ? 1 : 0.45f + 0.55f * fabsf(sinf(osGetTime() / 380.0f));
+    uiCirculo(378 - w - 10, 214, 4, uiMistura(COR_CARTAO, cor, pulso));
+    float wNome = 378 - w - 20 - 44 - 8;
+    uiIcone(IC_PC, 30, 214, 15, COR_MUDO, COR_CARTAO);   // (o mesmo ícone para PC e celular)
+    if (modoRemoto)     uiTexto(44, 207, 13, COR_TEXTO2, ESQ, wNome, "%s (pela internet)", nomePC[0] ? nomePC : "PC");
+    else if (!ipPC[0])  uiTexto(44, 207, 13, COR_MUDO, ESQ, wNome, "Procurando...");
+    else if (nomePC[0]) uiTexto(44, 207, 13, COR_TEXTO2, ESQ, wNome, "%s (%s)", nomePC, ipPC);
+    else                uiTexto(44, 207, 13, COR_TEXTO2, ESQ, wNome, "PC %s", ipPC);
 
+    if (anim.entrada > 0.01f) uiRet(0, 0, 400, 240, uiAlfa(anim.corEntrada, anim.entrada));
+
+    // ---- tela de baixo: a grade. O escolhido é desenhado por último (fica por cima).
     uiTela(alvoBaixo);
-    for (int i = 0; i < N_ITENS; i++) {
-        bool s = i == sel;
-        uiBotao(tileX(i), tileY(i), tileW(i), TILE_H, itens[i].nome, itens[i].icone,
-                s ? itens[i].cor : COR_CARTAO, s ? COR_BRANCO : itens[i].corClara);
+    for (int i = 0; i < N_ITENS; i++)
+        if (i != sel) desenharTile(i, cel);
+    desenharTile(sel, cel);
+    if (anim.entrada > 0.01f) uiRet(0, 0, 320, 240, uiAlfa(anim.corEntrada, anim.entrada));
+}
+
+// Abrir um módulo: a cor dele cresce a partir do tile e toma as duas telas.
+#define QUADROS_ABRIR 9
+static void transicaoAbrir(int i, bool temIP) {
+    const Item *it = &itens[i];
+    float x0 = tileX(i), y0 = tileY(i), w0 = tileW(i), h0 = tileH(i);
+    for (int q = 1; q <= QUADROS_ABRIR && aptMainLoop(); q++) {
+        float f = (float)q / QUADROS_ABRIR;
+        f = 1 - (1 - f) * (1 - f);              // rápido no começo, suave no fim
+        uiQuadro();
+        desenharMenu(i, -1, temIP);
+        C2D_SceneBegin(alvoCima);
+        uiRet(0, 0, 400, 240, uiAlfa(it->cor, f));
+        C2D_SceneBegin(alvoBaixo);
+        float x = x0 * (1 - f), y = y0 * (1 - f), w = w0 + (320 - w0) * f, h = h0 + (240 - h0) * f;
+        uiRetArred(x, y, w, h, 12 * (1 - f), it->cor);
+        uiIcone(it->icone, x + w / 2, y + h / 2, 26 + 38 * f, COR_BRANCO, it->cor);
+        uiFim();
     }
+    // na volta, a cor some por cima do menu
+    anim.entrada = 1;
+    anim.corEntrada = it->cor;
 }
 
 int main(int argc, char **argv) {
@@ -289,7 +445,10 @@ int main(int argc, char **argv) {
         abrirSonda();
         descoberta = descobertaAbrir();
     }
-    int sel = 0;
+    hidSetRepeatParameters(22, 7);      // segurar a cruz ou o circle pad anda sozinho
+    int sel = lerUltimoModulo();
+    int apertado = -1;                  // tile com o dedo em cima (abre ao soltar)
+    touchPosition toque = { 0 };
     u32 quadro = 0;
     bool temIP = false;
     bool esperarSoltarStart = false;    // o START que fechou um módulo ainda está apertado
@@ -321,19 +480,29 @@ int main(int argc, char **argv) {
             abrirSonda();
             esperarSoltarStart = true;
         }
-        if (down & KEY_DLEFT)  sel = sel % 2 ? sel - 1 : sel;
-        if (down & KEY_DRIGHT) sel = sel % 2 || sel + 1 >= N_ITENS ? sel : sel + 1;
-        if (down & KEY_DUP)    sel = sel >= 2 ? sel - 2 : sel;
-        if (down & KEY_DDOWN)  sel = sel + 2 < N_ITENS ? sel + 2 : sel;
+        u32 rep = hidKeysDownRepeat();
+        if (rep & KEY_LEFT)  sel = mover(sel, -1, 0);
+        if (rep & KEY_RIGHT) sel = mover(sel, 1, 0);
+        if (rep & KEY_UP)    sel = mover(sel, 0, -1);
+        if (rep & KEY_DOWN)  sel = mover(sel, 0, 1);
+        if (rep & KEY_L)     sel = mover(sel, -1, 0);
+        if (rep & KEY_R)     sel = mover(sel, 1, 0);
         if (down & KEY_A) abrir = sel;
         if (down & KEY_Y) abrir = ITEM_AJUSTES;
 
-        if (down & KEY_TOUCH) {
-            touchPosition tp;
-            hidTouchRead(&tp);
-            for (int i = 0; i < N_ITENS; i++)
-                if (uiDentro(&tp, tileX(i), tileY(i), tileW(i), TILE_H)) sel = abrir = i;
+        // toque: o tile afunda com o dedo e abre ao soltar em cima dele (arrastar
+        // para fora desiste)
+        if (hidKeysHeld() & KEY_TOUCH) {
+            hidTouchRead(&toque);
+            int t = tileNoToque(&toque);
+            if (down & KEY_TOUCH) apertado = t;
+            else if (t != apertado) apertado = -1;
+            if (apertado >= 0) sel = apertado;
+        } else if (apertado >= 0) {
+            if (hidKeysUp() & KEY_TOUCH) abrir = apertado;
+            apertado = -1;
         }
+        if (abrir >= 0) sel = abrir;
 
         // versão nova na internet: procura sozinho alguns segundos depois de abrir
         // e pergunta uma vez se quer atualizar
@@ -364,11 +533,14 @@ int main(int argc, char **argv) {
             } else if (it->precisaPC && !modoRemoto && !ipPC[0] && !pedirIP()) {
                 // ainda sem PC e cancelou o IP: continua no menu (a descoberta segue tentando)
             } else {
+                gravarUltimoModulo(abrir);
+                transicaoAbrir(abrir, temIP);
                 fecharSonda();
                 it->abrir();
                 if (aptShouldClose()) break;   // fechado pelo HOME dentro do módulo: sai já
                 apertouStart = false;       // o START dentro do módulo era para sair dele
                 esperarSoltarStart = true;
+                hidSetRepeatParameters(22, 7);      // (a Steam e os Ajustes usam outro ritmo)
                 ultimaRespostaHub = 0;
                 if (redeMudou) {            // nos Ajustes escolheu outro PC (ou casa/internet)
                     redeMudou = false;
@@ -380,7 +552,7 @@ int main(int argc, char **argv) {
         }
 
         uiQuadro();
-        desenharMenu(sel, temIP);
+        desenharMenu(sel, apertado, temIP);
         uiFim();
     }
 

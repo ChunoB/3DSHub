@@ -497,16 +497,17 @@ static void desenharLista(int sel, const char *aviso) {
         uiRetArred(16, 186, 368, 26, 10, HEX(0x633806));
         uiTexto(28, 191, 13, COR_AMARELO, ESQ, 344, "%s", aviso);
     }
-    uiTexto(16, 218, 12, COR_MUDO, ESQ, 0, "PC %s", ipPC);
+    uiTexto(16, 218, 12, COR_MUDO, ESQ, 0, "%s %s", alvoCelular() ? "Celular" : "PC", modoRemoto ? "(pela internet)" : ipPC);
 
     uiTela(alvoBaixo);
-    if (nJanelas == 0) uiTexto(160, 100, 14, COR_MUDO, CENTRO, 0, "Nenhuma janela aberta no PC");
+    if (nJanelas == 0) uiTexto(160, 100, 14, COR_MUDO, CENTRO, 0, "Nenhuma janela aberta no %s", nomeDoAlvo());
     for (int i = inicioLista; i < nJanelas && i < inicioLista + LINHAS; i++) {
         bool s = i == sel;
-        uiRetArred(10, linhaY(i), 300, LINHA_H, 8, s ? COR_AZUL : COR_CARTAO);
+        uiCartaoSel(10, linhaY(i), 300, LINHA_H, 8, s, COR_AZUL);
         uiTexto(20, linhaY(i) + 6, 13, s ? COR_BRANCO : COR_TEXTO2, ESQ, 280, "%s", janelas[i]);
     }
-    uiTexto(160, 222, 11, COR_MUDO, CENTRO, 0, "A ou toque: mostrar   X: atualizar   START: sair");
+    uiRolagem(313, 8, LINHAS * (LINHA_H + 2) - 2, nJanelas, LINHAS, inicioLista, COR_AZUL_CL);
+    uiDicas(160, 222, CENTRO, "A", "mostrar", "X", "atualizar", "START", "sair", NULL);
 }
 
 // abas e botões da tela de baixo enquanto mostra a janela
@@ -541,9 +542,9 @@ static void desenharEspelho(UiImagem *im, bool temImagem, const char *janela, fl
 
     uiTela(alvoBaixo);
     // abas: Mover (o dedo move a imagem) / Clicar (o dedo vira mouse no PC)
-    uiRetArred(10, ABA_Y, 145, ABA_H, 9, !modoClique ? COR_AZUL : COR_CARTAO);
+    uiCartaoSel(10, ABA_Y, 145, ABA_H, 9, !modoClique, COR_AZUL);
     uiTexto(82, ABA_Y + 8, 14, !modoClique ? COR_BRANCO : COR_MUDO, CENTRO, 0, "Mover");
-    uiRetArred(165, ABA_Y, 145, ABA_H, 9, modoClique ? COR_AZUL : COR_CARTAO);
+    uiCartaoSel(165, ABA_Y, 145, ABA_H, 9, modoClique, COR_AZUL);
     uiTexto(237, ABA_Y + 8, 14, modoClique ? COR_BRANCO : COR_MUDO, CENTRO, 0, "Clicar");
 
     if (modoClique && tecladoAberto) {
@@ -569,7 +570,7 @@ static void desenharEspelho(UiImagem *im, bool temImagem, const char *janela, fl
         }
         return;
     } else {
-        uiRetArred(10, ARRASTO_Y0, 300, ARRASTO_Y1 - ARRASTO_Y0, 10, COR_CARTAO);
+        uiCartao(10, ARRASTO_Y0, 300, ARRASTO_Y1 - ARRASTO_Y0, 10);
         // minimapa da parte visível
         float mw = 150, mh = 90, mx = 160 - mw / 2, my = 60;
         uiRet(mx, my, mw, mh, COR_CARTAO2);
@@ -580,7 +581,8 @@ static void desenharEspelho(UiImagem *im, bool temImagem, const char *janela, fl
         if (vx + vw > mx + mw) vx = mx + mw - vw;
         if (vy + vh > my + mh) vy = my + mh - vh;
         uiRet(vx, vy, vw, vh, COR_AZUL);
-        uiTexto(160, 160, 11, COR_MUDO, CENTRO, 0, "Arraste aqui para mover   R/L: zoom");
+        uiTexto(160, 47, 11, COR_MUDO, CENTRO, 0, "Arraste aqui para mover a imagem");
+        uiDicas(160, 160, CENTRO, "L/R", "zoom", "Y", "inteira", "X", "clicar", "B", "lista", NULL);
     }
 
     for (int i = 0; i < 4; i++) {
@@ -589,21 +591,10 @@ static void desenharEspelho(UiImagem *im, bool temImagem, const char *janela, fl
     }
 }
 
-static void desenharConectando(void) {
-    uiQuadro();
-    uiTela(alvoCima);
-    uiBarraStatus("Espelho", IC_ESPELHO, COR_AZUL_CL);
-    uiTexto(200, 96, 20, COR_TEXTO, CENTRO, 0, "Conectando ao PC...");
-    uiTexto(200, 128, 13, COR_MUDO, CENTRO, 0, "%s", ipPC);
-    uiTela(alvoBaixo);
-    uiTexto(160, 108, 14, COR_MUDO, CENTRO, 0, "B ou START: cancelar");
-    uiFim();
-}
-
 // ---------------------------------------------------------------- módulo
 
 void modEspelho(void) {
-    desenharConectando();
+    telaConectando("Espelho", IC_ESPELHO, COR_AZUL_CL);
     int sock = conectarTCP(PORTA, 8000);
     if (sock == CONEXAO_CANCELADA) return;
     if (sock < 0 || !pedirLista(sock)) {
@@ -633,6 +624,7 @@ void modEspelho(void) {
     int quadros = 0;
     float fps = 0;
     bool saiu = false, caiu = false;
+    u64 ultimoSinal = 0;
 
     modoClique = mostrandoJanela = direitoArmado = tecladoAberto = false;
     nEnvios = 0;
@@ -654,6 +646,7 @@ void modEspelho(void) {
         }
 
         if (!mostrando) {
+            if (!manterConexao(sock, &ultimoSinal)) { caiu = true; break; }   // lista parada: sinal de vida
             int abrir = -1;
             if ((down & KEY_DUP) && sel > 0) sel--;
             if ((down & KEY_DDOWN) && sel < nJanelas - 1) sel++;

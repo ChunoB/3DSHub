@@ -4,7 +4,8 @@
 
 Junta tudo: Descoberta (5009), Ajustes e atualização do app (5010),
 Controle (5005), Segunda Tela (5006), Câmera (5007 + OBS em
-http://127.0.0.1:8090/obs), Espelho (5008), Steam (5012) e Som (5013).
+http://127.0.0.1:8090/obs), Espelho (5008), acesso pela internet (5011),
+Steam (5012), Som (5013), Bichinho (5014), Pescaria (5015) e Karaokê (5016).
 
 Rodar escondido (sem janela):  pythonw hub.py
 Rodar vendo os logs:            py hub.py
@@ -128,6 +129,7 @@ def main():
                "Som": Som, "Bichinho": Bicho, "Pescaria": Pescaria,
                "Karaoke": Karaoke}
     servicos, erros = {}, []
+    porta_ocupada = set()               # dos que não iniciaram, os que foi por causa da porta
     for nome, classe in classes.items():
         servicos[nome] = Falhou()
         try:
@@ -137,6 +139,8 @@ def main():
             # quase sempre: outro servidor (PadRemoto, SegundaTela ou outro Hub) já usa a porta;
             # no Controle também pode ser o driver ViGEmBus faltando
             erros.append(nome)
+            if isinstance(e, OSError):
+                porta_ocupada.add(nome)
             print(f"{nome}: nao iniciou ({e!r})")
     redes = ", ".join(f"{nome} {ip}" for nome, ip in ips_locais())
     print(f"Ouvindo em: {redes}. Servicos com erro: {erros or 'nenhum'}")
@@ -152,6 +156,7 @@ def main():
     controle, tela = servicos["Controle"], servicos["Segunda Tela"]
     camera, espelho = servicos["Camera"], servicos["Espelho"]
     remoto, steam, som = servicos["Remoto"], servicos["Steam"], servicos["Som"]
+    bicho, pescaria, karaoke = servicos["Bichinho"], servicos["Pescaria"], servicos["Karaoke"]
 
     def linha_remoto(_):
         if "Remoto" in erros:
@@ -181,10 +186,13 @@ def main():
             ctypes.windll.user32.MessageBoxW(None, texto, "3DS Hub - parear longe de casa", 0x40)
         threading.Thread(target=mostrar, daemon=True).start()
 
-    def linha_status(nome, s, extra=""):
+    def linha_status(nome, s, extra="", rotulo=None):
+        # nome = a chave do serviço; rotulo = como aparece no menu (com acento)
+        rotulo = rotulo or nome
         if nome in erros:
-            return f"{nome}: porta ocupada"
-        return f"{nome}: {'conectado' if s.status.get('conectado') else 'esperando'}{extra}"
+            # (antes dizia "porta ocupada" até quando o que faltava era o driver do controle)
+            return f"{rotulo}: " + ("porta ocupada" if nome in porta_ocupada else "não iniciou (veja o log)")
+        return f"{rotulo}: {'conectado' if s.status.get('conectado') else 'esperando'}{extra}"
 
     def ao_sair(icone, _):
         icone.visible = False
@@ -218,12 +226,18 @@ def main():
         pystray.MenuItem(lambda _: linha_status("Segunda Tela", tela), None, enabled=False),
         pystray.MenuItem(lambda _: linha_status(
             "Camera", camera,
-            f" ({camera.status['fps']:.1f} fps)" if camera.status.get("conectado") else ""), None, enabled=False),
+            f" ({camera.status['fps']:.1f} fps)" if camera.status.get("conectado") else "", "Câmera"),
+            None, enabled=False),
         pystray.MenuItem(lambda _: linha_status("Espelho", espelho), None, enabled=False),
         pystray.MenuItem(lambda _: linha_status(
             "Steam", steam,
             f" - {steam.status['jogo']}" if steam.status.get("jogo") else ""), None, enabled=False),
         pystray.MenuItem(lambda _: linha_status("Som", som), None, enabled=False),
+        # (os três módulos mais novos não apareciam aqui: se a porta de um estivesse
+        # ocupada, só o aviso de quando o Hub abre dizia)
+        pystray.MenuItem(lambda _: linha_status("Bichinho", bicho), None, enabled=False),
+        pystray.MenuItem(lambda _: linha_status("Pescaria", pescaria), None, enabled=False),
+        pystray.MenuItem(lambda _: linha_status("Karaoke", karaoke, rotulo="Karaokê"), None, enabled=False),
         pystray.MenuItem(linha_remoto, None, enabled=False),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("Acesso pela internet", alternar_remoto,
@@ -234,14 +248,14 @@ def main():
                          lambda: subprocess.Popen([pythonw(), os.path.join(PASTA, "definir_senha.py")],
                                                   cwd=PASTA),
                          enabled=lambda _: "Remoto" not in erros),
-        pystray.MenuItem("Parear um 3DS longe de casa (codigo)...", codigo_longe,
+        pystray.MenuItem("Parear um 3DS longe de casa (código)...", codigo_longe,
                          enabled=lambda _: "Remoto" not in erros),
-        pystray.MenuItem("Trocar o codigo do acesso pela internet", trocar_codigo,
+        pystray.MenuItem("Trocar o código do acesso pela internet", trocar_codigo,
                          visible=lambda _: getattr(remoto, "ligado", False)),
-        pystray.MenuItem("Copiar link da camera pro OBS", copiar_link_obs),
+        pystray.MenuItem("Copiar link da câmera pro OBS", copiar_link_obs),
         pystray.MenuItem("Testar controle (joy.cpl)", lambda: subprocess.Popen(
             ["rundll32.exe", "shell32.dll,Control_RunDLL", "joy.cpl"])),
-        pystray.MenuItem("Editar configuracoes", lambda: os.startfile(ARQ_CONFIG)),
+        pystray.MenuItem("Editar configurações", lambda: os.startfile(ARQ_CONFIG)),
         pystray.MenuItem("Ver log", lambda: os.startfile(LOG)),
         pystray.MenuItem("Iniciar com o Windows", alternar_inicio,
                          checked=lambda _: config["iniciar_com_windows"]),
@@ -262,7 +276,7 @@ def main():
     def aviso_inicial():
         time.sleep(2)
         if erros:
-            icone.notify(f"Nao iniciou: {', '.join(erros)}. Veja o log (icone > Ver log). "
+            icone.notify(f"Não iniciou: {', '.join(erros)}. Veja o log (ícone > Ver log). "
                          "Causas comuns: PadRemoto/SegundaTela antigos abertos ou driver ViGEmBus faltando.",
                          "3DS Hub")
 

@@ -176,6 +176,10 @@ int abrirUDP(int porta, struct sockaddr_in *destino) {
 }
 
 int conectarTCP(int porta, int timeoutMs) {
+    return conectarTCPTeclas(porta, timeoutMs, KEY_B | KEY_START);
+}
+
+int conectarTCPTeclas(int porta, int timeoutMs, u32 teclasCancelar) {
     // pela internet o TLS demora mais para abrir (sobretudo no Old 3DS)
     if (modoRemoto) return tunelAbrir(porta, false, timeoutMs < 12000 ? 12000 : timeoutMs);
     int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -215,7 +219,7 @@ int conectarTCP(int porta, int timeoutMs) {
             svcSleepThread(10 * 1000000LL);   // 10 ms: o poll pode voltar na hora sem ter conectado
         }
         hidScanInput();
-        if (hidKeysDown() & (KEY_B | KEY_START)) {
+        if (hidKeysDown() & teclasCancelar) {
             close(sock);
             return CONEXAO_CANCELADA;
         }
@@ -280,9 +284,58 @@ int receberDe(int sock, void *buf, size_t n) {
     return recvfrom(sock, buf, n, 0, NULL, NULL);
 }
 
+bool manterConexao(int sock, u64 *ultimo) {
+    u64 agora = osGetTime();
+    if (!*ultimo) *ultimo = agora;
+    if (agora - *ultimo < 20000) return true;
+    *ultimo = agora;
+    return enviarTudo(sock, "\n", 1, 1000);
+}
+
 void fecharRede(int sock) {
     if (ehTunel(sock)) tunelFechar(sock);
     else if (sock >= 0) close(sock);
+}
+
+// ---------------------------------------------------------------- telas e peças comuns
+
+const char *nomeDoAlvo(void) { return alvoCelular() ? "celular" : "PC"; }
+
+void telaConectando(const char *modulo, int icone, u32 cor) {
+    uiQuadro();
+    uiTela(alvoCima);
+    uiBarraStatus(modulo, icone, cor);
+    uiCartao(12, 70, 376, 84, 14);
+    uiTexto(200, 86, 20, COR_TEXTO, CENTRO, 350, "Conectando ao %s...", nomeDoAlvo());
+    uiTexto(200, 118, 13, COR_MUDO, CENTRO, 350, "%s", modoRemoto ? "pela internet" : ipPC);
+    uiTela(alvoBaixo);
+    uiDicas(160, 113, CENTRO, "B", "cancelar", NULL);
+    uiFim();
+}
+
+void avisoSemConexao(const char *modulo, int icone, u32 cor) {
+    uiAviso(modulo, modoRemoto ? "Não consegui abrir a conexão pela internet.\n\n"
+                                 "O PC precisa estar ligado, com o 3DS Hub aberto,\n"
+                                 "e o 3DS com internet no Wi-Fi."
+                               : "Não consegui abrir a conexão de rede.\n\n"
+                                 "Confira o Wi-Fi do 3DS e tente de novo.", icone, cor);
+}
+
+float giroCoeficiente(void) {
+    // ~14,375 leituras por grau/s; se o 3DS não disser (ou disser algo absurdo), usa isso
+    float coef = 14.375f;
+    if (R_FAILED(HIDUSER_GetGyroscopeRawToDpsCoefficient(&coef)) || coef < 1.0f) coef = 14.375f;
+    return coef;
+}
+
+void controleSoltarTudo(int sock, const struct sockaddr_in *destino, u32 *seq) {
+    PacoteControle p;
+    memset(&p, 0, sizeof(p));
+    memcpy(p.magic, "3DS2", 4);
+    for (int i = 0; i < 5; i++) {
+        p.seq = (*seq)++;
+        enviarPara(sock, &p, sizeof(p), destino);
+    }
 }
 
 // ---------------------------------------------------------------- JPEG

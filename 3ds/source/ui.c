@@ -23,6 +23,10 @@ static bool mcuOk;
 static u8 porcento = 0xFF;                   // bateria de 0 a 100 (0xFF = não sabe)
 static bool temIP;
 
+// Posição de cada pixel dentro do bloco 8x8 da textura (ordem Z), já separada em
+// coluna e linha: posição = zCol[x & 7] + zLin[y & 7]. Montada uma vez em uiIniciar.
+static u8 zCol[8], zLin[8];
+
 // ---------------------------------------------------------------- telas
 
 void uiIniciar(void) {
@@ -37,6 +41,10 @@ void uiIniciar(void) {
     if (info && info->lineFeed) alturaLinha = info->lineFeed;
     ptmuInit();
     mcuOk = R_SUCCEEDED(mcuHwcInit());       // porcentagem exata da bateria
+    for (int i = 0; i < 8; i++) {
+        zCol[i] = (i & 1) | ((i & 2) << 1) | ((i & 4) << 2);
+        zLin[i] = zCol[i] << 1;
+    }
 }
 
 void uiEncerrar(void) {
@@ -69,8 +77,39 @@ void uiTela(C3D_RenderTarget *alvo) {
     C2D_SceneBegin(alvo);
 }
 
+void uiTelaGrad(C3D_RenderTarget *alvo, u32 corCima, u32 corBaixo) {
+    C2D_TargetClear(alvo, corBaixo);
+    C2D_SceneBegin(alvo);
+    uiRetGrad(0, 0, alvo == alvoBaixo ? 320 : 400, 240, corCima, corBaixo);
+}
+
 void uiFim(void) {
     C3D_FrameEnd(0);
+}
+
+// ---------------------------------------------------------------- cor e movimento
+
+u32 uiMistura(u32 a, u32 b, float t) {
+    if (t <= 0) return a;
+    if (t >= 1) return b;
+    u32 r = 0;
+    for (int i = 0; i < 32; i += 8) {
+        float ca = (a >> i) & 0xFF, cb = (b >> i) & 0xFF;
+        r |= (u32)(ca + (cb - ca) * t + 0.5f) << i;
+    }
+    return r;
+}
+
+u32 uiAlfa(u32 cor, float alfa) {
+    if (alfa < 0) alfa = 0;
+    if (alfa > 1) alfa = 1;
+    return (cor & 0x00FFFFFFu) | ((u32)((cor >> 24) * alfa + 0.5f) << 24);
+}
+
+float uiSuave(float atual, float alvo, float taxa) {
+    float d = alvo - atual;
+    if (d > -0.002f && d < 0.002f) return alvo;
+    return atual + d * taxa;
 }
 
 // ---------------------------------------------------------------- formas
@@ -132,6 +171,25 @@ void uiBarra(float x, float y, float w, float h, float f, u32 cor, u32 corFundo)
     if (f > 0) uiRetArred(x, y, w * f < h ? h : w * f, h, h / 2, cor);
 }
 
+void uiRetGrad(float x, float y, float w, float h, u32 corCima, u32 corBaixo) {
+    if (w <= 0 || h <= 0) return;
+    C2D_DrawRectangle(x, y, Z, w, h, corCima, corCima, corBaixo, corBaixo);
+}
+
+void uiCartaoCor(float x, float y, float w, float h, float raio, u32 cor, u32 corBorda) {
+    uiRetArred(x, y, w, h, raio, corBorda);
+    uiRetArred(x + 1, y + 1, w - 2, h - 2, raio - 1, cor);
+}
+
+void uiCartao(float x, float y, float w, float h, float raio) {
+    uiCartaoCor(x, y, w, h, raio, COR_CARTAO, COR_BORDA);
+}
+
+void uiCartaoSel(float x, float y, float w, float h, float raio, bool escolhido, u32 corEscolhido) {
+    if (escolhido) uiRetArred(x, y, w, h, raio, corEscolhido);
+    else uiCartao(x, y, w, h, raio);
+}
+
 // ---------------------------------------------------------------- texto
 
 static float larguraCaractere(u32 codigo, float escala) {
@@ -176,8 +234,9 @@ float uiTexto(float x, float y, float tamanho, u32 cor, int alinhamento, float l
     C2D_TextOptimize(&t);
     float w, h;
     C2D_TextGetDimensions(&t, escala, escala, &w, &h);
-    float dx = alinhamento == CENTRO ? x - w / 2 : alinhamento == DIR ? x - w : x;
-    C2D_DrawText(&t, C2D_WithColor, dx, y, Z, escala, escala, cor);
+    // com várias linhas, cada uma é alinhada por conta própria (centro ou direita)
+    u32 modo = alinhamento == CENTRO ? C2D_AlignCenter : alinhamento == DIR ? C2D_AlignRight : C2D_AlignLeft;
+    C2D_DrawText(&t, C2D_WithColor | modo, x, y, Z, escala, escala, cor);
     return w;
 }
 
@@ -192,6 +251,11 @@ float uiLarguraTexto(const char *s, float tamanho) {
         p += n;
     }
     return w;
+}
+
+float uiLarguraTextoMax(const char *s, float tamanho, float larguraMax) {
+    float w = uiLarguraTexto(s, tamanho);
+    return larguraMax > 0 && w > larguraMax ? larguraMax : w;
 }
 
 // ---------------------------------------------------------------- ícones
@@ -375,6 +439,7 @@ void uiIcone(int icone, float cx, float cy, float tamanho, u32 cor, u32 fundo) {
 
 void uiBarraStatus(const char *titulo, int icone, u32 cor) {
     uiRet(0, 0, 400, UI_BARRA, COR_BARRA);
+    uiRet(0, UI_BARRA - 1, 400, 1, COR_BORDA);
     if (icone >= 0) uiIcone(icone, 13, UI_BARRA / 2, 15, cor, COR_BARRA);
     uiTexto(icone >= 0 ? 26 : 8, 4, 14, cor, ESQ, 200, "%s", titulo);
 
@@ -407,12 +472,15 @@ void uiBarraStatus(const char *titulo, int icone, u32 cor) {
 
 void uiBotao(float x, float y, float w, float h, const char *rotulo, int icone,
              u32 corFundo, u32 corConteudo) {
-    uiRetArred(x, y, w, h, 9, corFundo);
+    if (corFundo == COR_CARTAO) uiCartao(x, y, w, h, 9);
+    else uiRetArred(x, y, w, h, 9, corFundo);
     bool temTexto = rotulo && rotulo[0];
     if (icone >= 0 && temTexto && w >= 2.2f * h) {           // ícone à esquerda, texto ao lado
         float t = h * 0.45f > 22 ? 22 : h * 0.45f;
-        uiIcone(icone, x + 10 + t / 2, y + h / 2, t, corConteudo, corFundo);
-        uiTexto(x + 18 + t, y + h / 2 - 8, 15, corConteudo, ESQ, w - 26 - t, "%s", rotulo);
+        float wt = uiLarguraTextoMax(rotulo, 15, w - 26 - t);
+        float x0 = x + (w - (t + 8 + wt)) / 2;          // ícone + texto juntos, no meio do botão
+        uiIcone(icone, x0 + t / 2, y + h / 2, t, corConteudo, corFundo);
+        uiTexto(x0 + t + 8, y + h / 2 - 8, 15, corConteudo, ESQ, w - 26 - t, "%s", rotulo);
     } else if (icone >= 0 && temTexto) {                     // ícone em cima, texto embaixo
         float t = h * 0.38f > 26 ? 26 : h * 0.38f;
         uiIcone(icone, x + w / 2, y + h / 2 - 7, t, corConteudo, corFundo);
@@ -429,28 +497,128 @@ bool uiDentro(const touchPosition *tp, float x, float y, float w, float h) {
     return tp->px >= x && tp->px < x + w && tp->py >= y && tp->py < y + h;
 }
 
+// ---------------------------------------------------------------- dicas de botão
+
+#define DICA_TEXTO 11.0f
+
+// Só uma letra (A, B, X, Y, L, R) vira um círculo; o resto (START, L/R...) uma pílula.
+static float larguraBotaoDica(const char *botao) {
+    if (!botao || !botao[0]) return 0;
+    if (!botao[1]) return UI_DICA;
+    return uiLarguraTexto(botao, 10) + 10;
+}
+
+float uiLarguraDica(const char *botao, const char *texto) {
+    float w = larguraBotaoDica(botao);
+    if (texto && texto[0]) w += (w > 0 ? 4 : 0) + uiLarguraTexto(texto, DICA_TEXTO);
+    return w;
+}
+
+float uiDica(float x, float y, const char *botao, const char *texto) {
+    float wb = larguraBotaoDica(botao);
+    if (wb > 0) {
+        uiRetArred(x, y, wb, UI_DICA, UI_DICA / 2.0f, COR_LINHA);
+        if (!botao[1]) uiTexto(x + wb / 2, y + 1.5f, 10, COR_BRANCO, CENTRO, 0, "%s", botao);
+        else           uiTexto(x + wb / 2, y + 1.5f, 10, COR_BRANCO, CENTRO, 0, "%s", botao);
+    }
+    float w = wb;
+    if (texto && texto[0]) {
+        if (w > 0) w += 4;
+        w += uiTexto(x + w, y + 0.5f, DICA_TEXTO, COR_TEXTO2, ESQ, 0, "%s", texto);
+    }
+    return w;
+}
+
+#define DICA_ESPACO 10
+void uiDicas(float x, float y, int alinhamento, ...) {
+    const char *pares[16];
+    int n = 0;
+    va_list args;
+    va_start(args, alinhamento);
+    while (n < 16) {
+        const char *botao = va_arg(args, const char *);
+        if (!botao) break;
+        pares[n++] = botao;
+        pares[n++] = va_arg(args, const char *);
+        if (!pares[n - 1]) { pares[n - 1] = ""; break; }
+    }
+    va_end(args);
+
+    float total = 0;
+    for (int i = 0; i < n; i += 2) total += uiLarguraDica(pares[i], pares[i + 1]) + (i ? DICA_ESPACO : 0);
+    if (alinhamento == CENTRO) x -= total / 2;
+    else if (alinhamento == DIR) x -= total;
+    for (int i = 0; i < n; i += 2) x += uiDica(x, y, pares[i], pares[i + 1]) + DICA_ESPACO;
+}
+
+void uiRolagem(float x, float y, float h, int total, int visiveis, int primeiro, u32 cor) {
+    if (total <= visiveis || visiveis <= 0) return;
+    uiRetArred(x, y, 3, h, 1.5f, COR_CARTAO);
+    float hp = h * visiveis / total;
+    if (hp < 12) hp = 12;
+    float f = (float)primeiro / (total - visiveis);
+    uiRetArred(x, y + (h - hp) * f, 3, hp, 1.5f, cor);
+}
+
+// ---------------------------------------------------------------- aviso
+
 void uiAviso(const char *titulo, const char *texto, int icone, u32 cor) {
+    u32 corFraca = uiMistura(COR_CARTAO, cor, 0.22f);
     while (aptMainLoop()) {
         hidScanInput();
         u32 down = hidKeysDown();
         touchPosition tp;
         hidTouchRead(&tp);
-        if (down & (KEY_START | KEY_A)) break;
-        if ((down & KEY_TOUCH) && uiDentro(&tp, 60, 150, 200, 56)) break;
+        if (down & (KEY_START | KEY_A | KEY_B)) break;
+        if ((down & KEY_TOUCH) && uiDentro(&tp, 60, 92, 200, 56)) break;
 
         uiQuadro();
         uiTela(alvoCima);
         uiBarraStatus("3DS Hub", IC_ENGRENAGEM, COR_MUDO);
-        uiCirculo(48, 70, 26, cor);
-        uiIcone(icone, 48, 70, 30, COR_BRANCO, cor);
-        uiTexto(88, 52, 20, COR_TEXTO, ESQ, 300, "%s", titulo);
-        uiTexto(20, 110, 14, COR_TEXTO2, ESQ, 0, "%s", texto);
+        uiCartao(12, 32, 376, 196, 14);
+        uiCirculo(44, 64, 20, corFraca);
+        uiIcone(icone, 44, 64, 22, cor == COR_CARTAO2 ? COR_TEXTO : uiMistura(cor, COR_BRANCO, 0.45f), corFraca);
+        uiTexto(74, 52, 20, COR_TEXTO, ESQ, 300, "%s", titulo);
+        uiRet(28, 94, 344, 1, COR_BORDA);
+        uiTexto(28, 104, 14, COR_TEXTO2, ESQ, 0, "%s", texto);
 
         uiTela(alvoBaixo);
-        uiTexto(160, 60, 14, COR_MUDO, CENTRO, 300, "Toque em OK ou aperte A");
-        uiBotao(60, 150, 200, 56, "OK", IC_OK, cor, COR_BRANCO);
+        uiBotao(60, 92, 200, 56, "OK", IC_OK, cor, COR_BRANCO);
+        uiDicas(160, 160, CENTRO, "A", "ou toque em OK", NULL);
         uiFim();
     }
+}
+
+bool uiConfirmar(const char *modulo, int icone, u32 cor, const char *titulo, const char *texto,
+                 const char *sim, const char *nao, void (*aCadaQuadro)(void)) {
+    while (aptMainLoop()) {
+        hidScanInput();
+        u32 down = hidKeysDown();
+        touchPosition tp;
+        hidTouchRead(&tp);
+        if (down & KEY_A) return true;
+        if (down & (KEY_B | KEY_START)) return false;
+        if (down & KEY_TOUCH) {
+            if (uiDentro(&tp, 10, 92, 145, 56)) return true;
+            if (uiDentro(&tp, 165, 92, 145, 56)) return false;
+        }
+        if (aCadaQuadro) aCadaQuadro();
+
+        uiQuadro();
+        uiTela(alvoCima);
+        uiBarraStatus(modulo, icone, cor);
+        uiCartao(12, 32, 376, 196, 14);
+        uiTexto(200, 52, 20, COR_TEXTO, CENTRO, 350, "%s", titulo);
+        uiRet(28, 86, 344, 1, COR_BORDA);
+        uiTexto(200, 98, 14, COR_TEXTO2, CENTRO, 0, "%s", texto);
+
+        uiTela(alvoBaixo);
+        uiBotao(10, 92, 145, 56, sim, IC_OK, cor, COR_BRANCO);
+        uiBotao(165, 92, 145, 56, nao, IC_X, COR_CARTAO, COR_TEXTO);
+        uiDicas(160, 160, CENTRO, "A", sim, "B", nao, NULL);
+        uiFim();
+    }
+    return false;
 }
 
 // ---------------------------------------------------------------- imagens
@@ -462,8 +630,34 @@ void uiAviso(const char *titulo, const char *texto, int icone, u32 cor) {
 //     de baixo para cima, a imagem saiu exatamente de cabeça para baixo;
 //   - dentro do bloco, ordem Z (bits de x e y intercalados, x no bit mais baixo).
 
-static inline u32 ordemZ(u32 x, u32 y) {          // x, y de 0 a 7 dentro do bloco
-    return (x & 1) | ((y & 1) << 1) | ((x & 2) << 1) | ((y & 2) << 2) | ((x & 4) << 2) | ((y & 4) << 3);
+// Copia a região (em pixels da imagem) para a textura. É o caminho mais quente do
+// Espelho e da Steam (a tela inteira a cada quadro), então anda de bloco em bloco:
+// numa linha, os 8 pixels de um bloco caem em 4 pares vizinhos (posições 0, 4, 16 e
+// 20 a partir da linha), e cada par vai de uma vez só, como um número de 32 bits.
+typedef u32 __attribute__((may_alias)) u32par;
+
+static void enviarRegiao(UiImagem *im, int x0, int y0, int x1, int y1) {
+    x0 &= ~7;                                        // blocos inteiros (o que sobra em
+    x1 = (x1 + 7) & ~7;                              // volta já é igual na imagem)
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > UI_IMG_LARG) x1 = UI_IMG_LARG;
+    if (y1 > UI_IMG_ALT) y1 = UI_IMG_ALT;
+    int blocos = (x1 - x0) >> 3;
+    if (blocos <= 0 || y1 <= y0) return;
+    u16 *destino = (u16 *)im->tex.data;
+    for (int y = y0; y < y1; y++) {
+        // linha 0 da imagem = topo da textura (v = 1)
+        u32par *d = (u32par *)(destino + ((y >> 3) * (UI_IMG_LARG / 8) + (x0 >> 3)) * 64 + zLin[y & 7]);
+        const u32par *o = (const u32par *)(im->pixels + y * UI_IMG_LARG + x0);
+        for (int b = 0; b < blocos; b++, d += 32, o += 4) {
+            d[0]  = o[0];
+            d[2]  = o[1];
+            d[8]  = o[2];
+            d[10] = o[3];
+        }
+    }
+    C3D_TexFlush(&im->tex);                          // a GPU lê da memória, não do cache da CPU
 }
 
 static bool criarImagem(UiImagem *im, int w, int h, GPU_TEXCOLOR formato);
@@ -496,17 +690,7 @@ static bool criarImagem(UiImagem *im, int w, int h, GPU_TEXCOLOR formato) {
 }
 
 void uiImagemEnviar(UiImagem *im) {
-    if (!im->ok) return;
-    u16 *destino = (u16 *)im->tex.data;
-    const u32 blocosPorLinha = UI_IMG_LARG / 8;
-    for (int r = 0; r < im->h; r++) {                   // r = linha da imagem, de cima para baixo
-        u32 y = r;                                      // y = linha da textura (0 = topo, v = 1)
-        u32 inicioLinha = (y >> 3) * blocosPorLinha * 64;
-        const u16 *origem = im->pixels + r * UI_IMG_LARG;
-        for (int x = 0; x < im->w; x++)
-            destino[inicioLinha + (x >> 3) * 64 + ordemZ(x & 7, y & 7)] = origem[x];
-    }
-    C3D_TexFlush(&im->tex);                             // a GPU lê da memória, não do cache da CPU
+    if (im->ok) enviarRegiao(im, 0, 0, im->w, im->h);
 }
 
 void uiImagemDesenhar(UiImagem *im, float x, float y) {
@@ -518,16 +702,7 @@ void uiImagemDesenharEscala(UiImagem *im, float x, float y, float escala) {
 }
 
 void uiImagemEnviarParte(UiImagem *im, int x0, int y0, int w, int h) {
-    if (!im->ok) return;
-    u16 *destino = (u16 *)im->tex.data;
-    const u32 blocosPorLinha = UI_IMG_LARG / 8;
-    for (int y = y0; y < y0 + h && y < UI_IMG_ALT; y++) {
-        u32 inicioLinha = (y >> 3) * blocosPorLinha * 64;
-        const u16 *origem = im->pixels + y * UI_IMG_LARG;
-        for (int x = x0; x < x0 + w && x < UI_IMG_LARG; x++)
-            destino[inicioLinha + (x >> 3) * 64 + ordemZ(x & 7, y & 7)] = origem[x];
-    }
-    C3D_TexFlush(&im->tex);
+    if (im->ok) enviarRegiao(im, x0, y0, x0 + w, y0 + h);
 }
 
 void uiImagemFiltro(UiImagem *im, bool suave) {

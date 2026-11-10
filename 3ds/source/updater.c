@@ -263,8 +263,21 @@ static void install_thread(void *arg)
 			return;
 		}
 		g_state = UPD_INSTALLING;
-		remove(g_3dsx_path);
-		if (rename(tmp, g_3dsx_path) != 0) { fail("Não consegui trocar o arquivo .3dsx"); g_busy = false; return; }
+		// Safe swap: the old file only goes away once the new one is in place, and comes
+		// back if the swap fails halfway (it used to be deleted first: a failed rename
+		// left the SD card without the app).
+		char old[272];
+		snprintf(old, sizeof old, "%s.anterior", g_3dsx_path);
+		remove(old);
+		bool had_old = rename(g_3dsx_path, old) == 0;
+		if (rename(tmp, g_3dsx_path) != 0) {
+			if (had_old) rename(old, g_3dsx_path);
+			remove(tmp);
+			fail("Não consegui trocar o arquivo .3dsx");
+			g_busy = false;
+			return;
+		}
+		remove(old);
 	}
 	g_prog = 1;
 	snprintf(g_msg, sizeof g_msg, "Versão %s instalada! Feche e abra o app.", g_latest);

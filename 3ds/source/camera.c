@@ -226,7 +226,7 @@ static void desenharBaixo(const Estado *e) {
     uiTela(alvoBaixo);
 
     // estado da conexão
-    uiRetArred(10, 8, 300, 40, 10, COR_CARTAO);
+    uiCartao(10, 8, 300, 40, 10);
     uiIcone(IC_CAMERA, 30, 28, 20, COR_CORAL_CL, COR_CARTAO);
     if (!e->conectado)    uiTexto(48, 19, 14, COR_AMARELO, ESQ, 140, alvoCelular() ? "Conectando ao celular..." : "Conectando ao PC...");
     else if (e->pausado)  uiTexto(48, 19, 14, COR_TEXTO2, ESQ, 140, "Pausado");
@@ -250,7 +250,7 @@ static void desenharBaixo(const Estado *e) {
     uiBotao(segX(2), BTN_Y, SEG_W, BTN_H, "Virar", IC_TELA_CHEIA, COR_CARTAO, COR_TEXTO);
 
     // como usar no OBS (ou o erro da câmera, se o 3DS recusou alguma configuração)
-    uiRetArred(10, 172, 300, 44, 10, erroConfig ? HEX(0x501313) : COR_CARTAO);
+    uiCartaoSel(10, 172, 300, 44, 10, erroConfig, HEX(0x501313));
     if (erroConfig) {
         uiTexto(20, 177, 12, COR_VERMELHO, ESQ, 280, "A câmera recusou a configuração");
         uiTexto(20, 194, 13, COR_TEXTO2, ESQ, 280, "erro 0x%08lX (me mande esse código)", erroConfig);
@@ -261,8 +261,7 @@ static void desenharBaixo(const Estado *e) {
         uiTexto(20, 177, 12, COR_MUDO, ESQ, 0, "No OBS: Fonte > Navegador");
         uiTexto(20, 194, 13, COR_TEXTO2, ESQ, 280, "http://127.0.0.1:8090/obs");
     }
-    uiTexto(10, 222, 11, COR_MUDO, ESQ, 0, "A pausar  X LED  B virar");
-    uiTexto(310, 222, 11, COR_MUDO, DIR, 0, "START: voltar ao menu");
+    uiDicas(160, 222, CENTRO, "A", "pausar", "X", "LED", "B", "virar", "START", "menu", NULL);
 }
 
 // ---------------------------------------------------------------- módulo
@@ -348,9 +347,11 @@ void modCamera(void) {
             desenharCima(&e, &esq, &dir);
             desenharBaixo(&e);
             uiFim();
-            sock = conectarTCP(PORTA, 1500);
+            // Só o START cancela (o B aqui vira a imagem). A tentativa é curta: enquanto
+            // ela dura a prévia fica parada, e na rede de casa o PC responde na hora.
+            sock = conectarTCPTeclas(PORTA, 600, KEY_START);
             if (sock == CONEXAO_CANCELADA) break;    // apertou START durante a conexão
-            if (sock < 0) proximaTentativa = osGetTime() + 2000;
+            if (sock < 0) proximaTentativa = osGetTime() + 3000;
         }
         e.conectado = sock >= 0;
 

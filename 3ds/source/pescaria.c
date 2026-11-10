@@ -110,7 +110,7 @@ static void desenharCima(float mira, float carga, bool carregando, u64 agora) {
     uiTexto(200, 215, 13, pc.msg[0] ? COR_AMARELO : COR_TEXTO2, CENTRO, 370, "%s", pc.msg[0] ? pc.msg : dica);
 }
 
-static void desenharBaixo(float anguloReel, float giro, bool tocando) {
+static void desenharBaixo(float anguloReel, bool tocando) {
     uiTela(alvoBaixo);
     bool puxar = pc.estado == FISGOU || pc.estado == PUXANDO;
     uiAnel(REEL_X, REEL_Y, REEL_R, 6, puxar ? COR_PESCA : COR_LINHA, COR_FUNDO);
@@ -124,19 +124,22 @@ static void desenharBaixo(float anguloReel, float giro, bool tocando) {
     uiLinha(REEL_X, REEL_Y, hx, hy, 6, COR_PESCA_CL);           // manivela
     uiCirculo(hx, hy, 12, tocando ? COR_BRANCO : COR_PESCA_CL);
     uiCirculo(REEL_X, REEL_Y, 8, COR_PESCA_CL);
-    uiTexto(160, 212, 11, COR_MUDO, CENTRO, 0, puxar ? "Gire a caneta em círculos!" : "Molinete: gire quando fisgar");
-    uiTexto(160, 226, 10, COR_MUDO, CENTRO, 0, "B: recolher   START: sair   %.0f°/s", giro);
+    uiTexto(160, 208, 11, puxar ? COR_PESCA_CL : COR_MUDO, CENTRO, 0, "%s",
+            puxar ? "Gire a caneta em círculos!" : "Molinete: gire quando fisgar");
+    uiDicas(160, 223, CENTRO, "A", "lançar", "B", "recolher", "START", "sair", NULL);
 }
 
 void modPescaria(void) {
     struct sockaddr_in dest;
     int sock = abrirUDP(PORTA, &dest);
-    if (sock < 0) return;
+    if (sock < 0) {
+        avisoSemConexao("Pescaria", IC_PEIXE, COR_PESCA);
+        return;
+    }
     memset(&pc, 0, sizeof(pc));
 
     HIDUSER_EnableGyroscope();
-    float coef = 14.375f;
-    if (R_FAILED(HIDUSER_GetGyroscopeRawToDpsCoefficient(&coef)) || coef < 1.0f) coef = 14.375f;
+    float coef = giroCoeficiente();
 
     Envio e;
     memset(&e, 0, sizeof(e));
@@ -251,7 +254,7 @@ void modPescaria(void) {
 
         uiQuadro();
         desenharCima(mira, carga, carregando, agora);
-        desenharBaixo(anguloReel, giro, tocando);
+        desenharBaixo(anguloReel, tocando);
         uiFim();
     }
 

@@ -162,7 +162,36 @@ LIGAR E SUSPENDER O PC PELO 3DS
   magico para ativar o computador". Se a aba "Avancado" tiver "Wake on
   Magic Packet" ou "WoWLAN", deixe ativado.
 
-O QUE MUDOU NESTA VERSAO (1.13.1)
+O QUE MUDOU NESTA VERSAO (1.14.0)
+- Visual novo no app do 3DS: menu em grade de 3 colunas com animacoes (o
+  modulo escolhido cresce, a cor dele toma a tela ao abrir e some ao voltar),
+  cartoes com contorno, dicas de botao desenhadas (A, B, START...) no lugar
+  do texto miudo e barras de rolagem nas listas.
+- Menu: circle pad e segurar a cruz andam sozinhos, L/R = anterior/proximo,
+  o toque abre ao soltar (arrastar para fora desiste) e o menu abre no
+  ultimo modulo usado.
+- Ajustes, Steam e Espelho: parado por mais de 1 minuto, o PC fechava a
+  conversa e o proximo botao dizia "a conexao caiu". Agora o 3DS mantem a
+  conexao viva e, nos Ajustes, conecta de novo sozinho.
+- Camera: o B (virar a imagem) fechava o modulo se apertado enquanto ele
+  procurava o PC; e a previa travava menos tempo sem o PC.
+- Controle, Segunda Tela, Pescaria e Karaoke: sem rede, o modulo voltava ao
+  menu sem dizer nada. Agora avisa.
+- Bichinho: uma roupa (skin) estragada nao e mais baixada sem parar.
+- Espelho e Steam mais leves: a imagem vai para a tela ~5x mais rapido.
+  Karaoke le o microfone so quando precisa.
+- Acesso pela internet: na Steam, o envio do controle podia estragar outro
+  envio que estava no meio e derrubar a conexao. Cada conexao agora tem o
+  seu espaco de envio.
+- Atualizar pela internet (.3dsx): o arquivo antigo so sai depois que o novo
+  esta no lugar (antes era apagado primeiro; se a troca falhasse, o cartao
+  ficava sem o app).
+- PC: o menu do icone mostra tambem Bichinho, Pescaria e Karaoke, e so diz
+  "porta ocupada" quando e isso mesmo (driver do controle faltando aparece
+  como "nao iniciou").
+- Atualize o app do 3DS e a pasta pc do PC.
+
+VERSAO 1.13.1
 - PC: o Hub nao abre mais duas vezes. Ao entrar no Windows o vigia e o
   atalho "Iniciar com o Windows" abriam um Hub cada; o segundo ficava sem
   as portas, com todos os servicos em erro, e o 3DS podia nao achar o PC.

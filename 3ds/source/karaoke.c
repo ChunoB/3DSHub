@@ -467,7 +467,7 @@ static void estrelas(float cx, float cy, float r, int n, float espaco) {
 }
 
 static void chipJogador(float x, float y, const char *nome, int cor, float larguraMax) {
-    float w = uiTexto(-1000, 0, 13, 0, ESQ, larguraMax, "%s", nome) + 30;
+    float w = uiLarguraTextoMax(nome, 13, larguraMax) + 30;
     uiRetArred(x, y, w, 22, 11, corPerfil(cor));
     uiCirculo(x + 11, y + 11, 6, COR_BRANCO);
     uiTexto(x + 22, y + 3, 13, COR_BRANCO, ESQ, larguraMax, "%s", nome);
@@ -571,9 +571,9 @@ static void desenharJogoBaixo(void) {
     }
     desenharFaixa();
     if (!pcAntigo && jg.rodada == 0)
-        uiTexto(200, 90, 13, COR_TEXTO, CENTRO, 230, "Sem rodada: START volta ao menu");
-    uiTexto(160, 202, 10, COR_MUDO, CENTRO, 316, "A Turbo   X Recomeçar   R Pular música");
-    uiTexto(160, 216, 10, COR_MUDO, CENTRO, 316, "SELECT Encerrar a vez   START Menu");
+        uiTexto(174, 90, 13, COR_TEXTO, CENTRO, 230, "Sem rodada: START volta ao menu");   // no meio da faixa
+    uiDicas(160, 200, CENTRO, "A", "turbo", "X", "recomeçar", "R", "pular música", NULL);
+    uiDicas(160, 218, CENTRO, "SELECT", "encerrar a vez", "START", "menu", NULL);
 }
 
 // ---------------------------------------------------------------- tela de cima: jogo
@@ -721,14 +721,16 @@ static void desenharMenuCima(bool conectado) {
         uiTexto(38, UI_BARRA + 8, 15, COR_TEXTO, ESQ, 350, "%s", jg.titulo);
         uiTexto(38, UI_BARRA + 26, 11, COR_MUDO, ESQ, 350, "%s%s", jg.artista, jg.tocando ? "" : "  (pausada)");
     } else {
-        uiTexto(200, UI_BARRA + 12, 14, COR_TEXTO2, CENTRO, 380, alvoCelular() ? "Toque uma música no celular (YouTube Music...)" : "Toque uma música no PC (Spotify, YouTube...)");
+        uiIcone(IC_MUSICA, 22, UI_BARRA + 20, 18, COR_LINHA, COR_FUNDO);
+        uiTexto(38, UI_BARRA + 8, 15, COR_TEXTO2, ESQ, 350, "Nada tocando");
+        uiTexto(38, UI_BARRA + 26, 11, COR_MUDO, ESQ, 350, alvoCelular() ? "Toque uma música no celular (YouTube Music...)" : "Toque uma música no PC (Spotify, YouTube...)");
     }
 
     uiTexto(14, 78, 13, COR_KARAOKE_CL, ESQ, 0, "Recordes desta música");
     if (!nTops) uiTexto(14, 100, 12, COR_MUDO, ESQ, 370, "Ninguém cantou esta ainda. Seja o primeiro!");
     for (int i = 0; i < nTops; i++) {
         float y = 98 + i * 22;
-        uiRetArred(10, y, 380, 20, 6, i == 0 ? HEX(0x3A1436) : COR_CARTAO);
+        uiCartaoSel(10, y, 380, 20, 6, i == 0, HEX(0x3A1436));
         uiTexto(20, y + 2, 13, i == 0 ? COR_AMARELO : COR_TEXTO2, ESQ, 0, "%d.", i + 1);
         uiTexto(44, y + 2, 13, COR_TEXTO, ESQ, 170, "%s", tops[i].nome);
         int d = tops[i].dif == 'F' ? 0 : tops[i].dif == 'D' ? 2 : 1;
@@ -767,7 +769,7 @@ static void desenharMenuBaixo(bool modoApagar) {
         if (i < nPerfis) {
             Perfil *p = &perfis[i];
             int ordem = ordemDe(p->id);
-            uiRetArred(x, y, CHIP_W, CHIP_H, 8, ordem ? corPerfil(p->cor) : COR_CARTAO);
+            uiCartaoSel(x, y, CHIP_W, CHIP_H, 8, ordem, corPerfil(p->cor));
             if (!ordem) uiRet(x, y + 4, 4, CHIP_H - 8, corPerfil(p->cor));
             uiTexto(x + 9, y + 2, 12, COR_BRANCO, ESQ, CHIP_W - 30, "%s", p->nome);
             uiTexto(x + 9, y + 16, 9, ordem ? COR_BRANCO : COR_MUDO, ESQ, 0, "nível %d", p->nivel);
@@ -781,7 +783,7 @@ static void desenharMenuBaixo(bool modoApagar) {
             uiTexto(x + CHIP_W / 2, y + 6, 13, COR_KARAOKE_CL, CENTRO, 0, "+ Novo perfil");
         } else {
             int ordem = ordemDe(0);
-            uiRetArred(x, y, CHIP_W, CHIP_H, 8, ordem ? COR_MUDO : COR_CARTAO);
+            uiCartaoSel(x, y, CHIP_W, CHIP_H, 8, ordem, COR_MUDO);
             uiTexto(x + 9, y + 6, 12, COR_TEXTO, ESQ, CHIP_W - 30, "Convidado");
             if (ordem) {
                 uiCirculo(x + CHIP_W - 11, y + 14, 9, COR_BRANCO);
@@ -796,30 +798,9 @@ static void desenharMenuBaixo(bool modoApagar) {
     uiBotao(184, 196, 130, 38, "Cantar! (A)", IC_MICROFONE, COR_KARAOKE, COR_BRANCO);
 }
 
-// tela simples de sim/não
+static void receberPacotes(void);
 static bool confirmar(const char *pergunta) {
-    while (aptMainLoop()) {
-        hidScanInput();
-        u32 down = hidKeysDown();
-        touchPosition tp;
-        hidTouchRead(&tp);
-        if (down & KEY_A) return true;
-        if (down & (KEY_B | KEY_START)) return false;
-        if (down & KEY_TOUCH) {
-            if (uiDentro(&tp, 20, 140, 130, 50)) return true;
-            if (uiDentro(&tp, 170, 140, 130, 50)) return false;
-        }
-        receberPacotes();
-        uiQuadro();
-        uiTela(alvoCima);
-        uiBarraStatus("Karaokê", IC_MICROFONE, COR_KARAOKE_CL);
-        uiTexto(200, 100, 16, COR_TEXTO, CENTRO, 380, "%s", pergunta);
-        uiTela(alvoBaixo);
-        uiBotao(20, 140, 130, 50, "Sim (A)", IC_OK, COR_VERMELHO, COR_BRANCO);
-        uiBotao(170, 140, 130, 50, "Não (B)", IC_X, COR_CARTAO2, COR_TEXTO);
-        uiFim();
-    }
-    return false;
+    return uiConfirmar("Karaokê", IC_MICROFONE, COR_VERMELHO, pergunta, "", "Sim", "Não", receberPacotes);
 }
 
 static int escolherCor(const char *nome) {
@@ -843,7 +824,7 @@ static int escolherCor(const char *nome) {
         uiTela(alvoCima);
         uiBarraStatus("Karaokê", IC_MICROFONE, COR_KARAOKE_CL);
         uiTexto(200, 60, 14, COR_TEXTO2, CENTRO, 0, "Escolha a cor de");
-        chipJogador(200 - (uiTexto(-1000, 0, 13, 0, ESQ, 200, "%s", nome) + 30) / 2, 90, nome, sel, 200);
+        chipJogador(200 - (uiLarguraTextoMax(nome, 13, 200) + 30) / 2, 90, nome, sel, 200);
         uiTela(alvoBaixo);
         uiTexto(160, 30, 13, COR_TEXTO2, CENTRO, 0, "Toque numa cor");
         for (int c = 0; c < 7; c++) {
@@ -942,14 +923,14 @@ static void desenharResultado(void) {
     uiTela(alvoBaixo);
     for (int j = 1; j <= 4; j++) {
         float x = 8 + (j - 1) * 77;
-        uiRetArred(x, 8, 73, 50, 8, COR_CARTAO);
+        uiCartao(x, 8, 73, 50, 8);
         uiTexto(x + 36, 13, 11, coresJulg[j], CENTRO, 0, "%s", j == 1 ? "Perfeito" : j == 2 ? "Ótimo" : j == 3 ? "Bom" : "Errou");
         uiTexto(x + 36, 30, 18, COR_TEXTO, CENTRO, 0, "%d", res.cont[j]);
     }
     // ranking da rodada até agora
     for (int i = 0; i < nRanking; i++) {
         float y = 66 + i * 22;
-        uiRetArred(8, y, 304, 20, 6, COR_CARTAO);
+        uiCartao(8, y, 304, 20, 6);
         uiCirculo(20, y + 10, 6, corPerfil(ranking[i].cor));
         uiTexto(32, y + 2, 13, COR_TEXTO, ESQ, 150, "%d. %s", i + 1, ranking[i].nome);
         uiTexto(304, y + 2, 13, COR_TEXTO, DIR, 0, "%lu", (unsigned long)ranking[i].pontos);
@@ -973,7 +954,7 @@ static void desenharRanking(void) {
     uiTexto(200, UI_BARRA + 28, 11, COR_MUDO, CENTRO, 380, "%s", jg.titulo);
     for (int i = 0; i < nRanking; i++) {
         float y = 76 + i * 36;
-        uiRetArred(30, y, 340, 32, 10, i == 0 ? HEX(0x3A1436) : COR_CARTAO);
+        uiCartaoSel(30, y, 340, 32, 10, i == 0, HEX(0x3A1436));
         uiTexto(48, y + 6, 18, i == 0 ? COR_AMARELO : COR_TEXTO2, ESQ, 0, "%d", i + 1);
         uiCirculo(80, y + 16, 8, corPerfil(ranking[i].cor));
         uiTexto(94, y + 7, 15, COR_TEXTO, ESQ, 130, "%s", ranking[i].nome);
@@ -1004,7 +985,10 @@ static void aviso(const char *texto) { uiAviso("Karaokê", texto, IC_MICROFONE, 
 
 void modKaraoke(void) {
     sock = abrirUDP(PORTA, &dest);
-    if (sock < 0) return;
+    if (sock < 0) {
+        avisoSemConexao("Karaokê", IC_MICROFONE, COR_KARAOKE);
+        return;
+    }
 
     u8 *micBuf = memalign(0x1000, MIC_BUF);
     bool mic = micBuf && R_SUCCEEDED(micInit(micBuf, MIC_BUF));
@@ -1046,13 +1030,16 @@ void modKaraoke(void) {
         bool conectado = ultimaResposta && agora - ultimaResposta < 2000;
 
         // ---- microfone e voz (sempre: o PC precisa da voz e de saber que o 3DS está aqui)
-        u32 fim = micGetLastSampleOffset() / 2;
-        u32 total = micTam / 2;
-        const s16 *dados = (const s16 *)micBuf;
-        for (int i = 0; i < N_AMOSTRAS; i++)
-            amostras[i] = dados[(fim + total - N_AMOSTRAS + i) % total];
         if (agora - ultimoEnvio >= 50) {
             ultimoEnvio = agora;
+            // as últimas N_AMOSTRAS do microfone (o buffer dele é um anel)
+            u32 total = micTam / 2;
+            u32 pos = (micGetLastSampleOffset() / 2 + total - N_AMOSTRAS) % total;
+            const s16 *dados = (const s16 *)micBuf;
+            for (int i = 0; i < N_AMOSTRAS; i++) {
+                amostras[i] = dados[pos];
+                if (++pos == total) pos = 0;
+            }
             hz = detectarNota(&vol);
             u8 pacote[8];
             u16 dhz = (u16)(hz * 10 > 65535 ? 0 : hz * 10);

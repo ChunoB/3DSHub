@@ -51,18 +51,36 @@ extern bool redeMudou;               // os Ajustes trocaram de PC ou de casa/int
 int  abrirUDP(int porta, struct sockaddr_in *destino);    // não bloqueia
 // Conecta sem travar: B ou START cancela. Retorna o socket, -1 se falhar ou -2 se cancelado.
 int  conectarTCP(int porta, int timeoutMs);
+// O mesmo, escolhendo quais botões cancelam (para quem usa o B para outra coisa).
+int  conectarTCPTeclas(int porta, int timeoutMs, u32 teclasCancelar);
 #define CONEXAO_CANCELADA -2
 bool enviarTudo(int sock, const void *dados, size_t n, int timeoutMs);
 bool receberTudo(int sock, void *dados, size_t n, int timeoutMs);
 int  enviarPara(int sock, const void *dados, size_t n, const struct sockaddr_in *destino);   // UDP
 int  receberDe(int sock, void *buf, size_t n);            // UDP sem bloquear; < 0 = nada
 void fecharRede(int sock);                                // fecha socket ou túnel
+// Conversa por TCP parada: o PC fecha a conexão depois de 1 minuto sem pedido (5 no
+// Espelho). Chame a cada volta do laço enquanto o módulo só espera: de 20 em 20 s manda
+// uma linha vazia, que o PC ignora mas conta como sinal de vida. *ultimo guarda a hora
+// do último sinal (comece com 0). false = a conexão caiu.
+bool manterConexao(int sock, u64 *ultimo);
 
 // JPEG
 bool jpegCodificar(const u16 *rgb565, int w, int h, int qualidade, u8 **saida, unsigned long *tam);
 // Decodifica para RGB565 em 'destino' (larguraLinha pixels por linha).
 bool jpegDecodificar(const u8 *dados, unsigned long tam, u16 *destino, int larguraLinha,
                      int maxW, int maxH, int *w, int *h);
+
+// Telas que todos os módulos mostram do mesmo jeito.
+// "Conectando ao PC..." (um quadro só: a conexão vem logo depois). modulo/icone/cor = barra de status.
+void telaConectando(const char *modulo, int icone, u32 cor);
+// O módulo não conseguiu abrir a conexão (sem Wi-Fi, ou o túnel pela internet não abriu).
+void avisoSemConexao(const char *modulo, int icone, u32 cor);
+// Para dizer "PC" ou "celular" nas mensagens.
+const char *nomeDoAlvo(void);
+
+// Giroscópio: leituras brutas por grau/s (graus/s = bruto / coeficiente).
+float giroCoeficiente(void);
 
 // Pacote do Controle (UDP 5005), usado pelo Controle e pela Steam.
 // O servidor lê com '<4sIIhhhhHHBBhhh' (32 bytes).
@@ -77,6 +95,8 @@ typedef struct __attribute__((packed)) {
     u8   flags;
     s16  guinada, inclinacao, rolagem;   // giroscópio em décimos de grau/s
 } PacoteControle;
+// Ao sair: avisa o PC (algumas vezes, é UDP) que todos os botões foram soltos.
+void controleSoltarTudo(int sock, const struct sockaddr_in *destino, u32 *seq);
 
 // Módulos
 void modControle(void);

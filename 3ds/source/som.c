@@ -72,12 +72,15 @@ static int decodificar(const u8 *dados, int n, int previsao, int indice, s16 *sa
 
 static void guardar(const s16 *amostras, int n) {
     LightLock_Lock(&trava);
+    u32 fim = inicio + quantas;         // onde entra a próxima (sem divisão: o ARM do 3DS não tem)
+    if (fim >= ANEL) fim -= ANEL;
     for (int i = 0; i < n; i++) {
         if (quantas == ANEL) {          // cheio: perde a mais antiga
-            inicio = (inicio + 1) % ANEL;
+            if (++inicio == ANEL) inicio = 0;
             quantas--;
         }
-        anel[(inicio + quantas) % ANEL] = amostras[i];
+        anel[fim] = amostras[i];
+        if (++fim == ANEL) fim = 0;
         quantas++;
     }
     if (quantas > MAXIMO) {             // atrasou demais: pula para perto do agora
@@ -93,7 +96,10 @@ static void preencher(s16 *saida) {
     LightLock_Lock(&trava);
     if (juntando && quantas >= ALVO) juntando = false;
     if (!juntando && quantas >= AMOSTRAS_BUF) {
-        for (int i = 0; i < AMOSTRAS_BUF; i++) saida[i] = anel[(inicio + i) % ANEL];
+        u32 ateOFim = ANEL - inicio;    // o anel pode dar a volta no meio: copia em 2 pedaços
+        u32 n1 = ateOFim < AMOSTRAS_BUF ? ateOFim : AMOSTRAS_BUF;
+        memcpy(saida, anel + inicio, n1 * sizeof(s16));
+        memcpy(saida + n1, anel, (AMOSTRAS_BUF - n1) * sizeof(s16));
         inicio = (inicio + AMOSTRAS_BUF) % ANEL;
         quantas -= AMOSTRAS_BUF;
     } else {
@@ -185,6 +191,24 @@ void somEncerrar(void) {
 }
 
 bool somLigado(void) { return rodando; }
+
+void somAvisoSemDsp(u32 cor) {
+    uiAviso("Sem som",
+            "Falta o arquivo sdmc:/3ds/dspfirm.cdc.\n\n"
+            "Para criar: abra o menu Rosalina\n"
+            "(L + baixo + SELECT) > Miscellaneous options\n"
+            "> Dump DSP firmware. Depois abra de novo.", IC_MUDO, cor);
+}
+
+int somCuidarDoHome(void) {
+    if (!aptCheckHomePressRejected()) return SOM_HOME_NADA;
+    bool tinhaSom = somLigado();
+    somEncerrar();
+    aptJumpToHomeMenu();
+    if (aptShouldClose()) return SOM_HOME_FECHAR;   // fechou pelo HOME: sai sem religar o som
+    if (tinhaSom) somIniciar();
+    return SOM_HOME_VOLTOU;
+}
 
 bool somChegando(void) { return rodando && ultimoPacote && osGetTime() - ultimoPacote < 1000; }
 
